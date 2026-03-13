@@ -16,6 +16,32 @@ definitions:
       sessionToken:
         type: string
     type: object
+  handlers.ZoneResponse:
+    properties:
+      h3_zone:
+        type: string
+      monsters:
+        items:
+          $ref: '#/definitions/services.ZoneMonsterResponse'
+        type: array
+    type: object
+  services.ZoneMonsterResponse:
+    properties:
+      current_hp:
+        type: integer
+      h3_index:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      is_alive:
+        type: boolean
+      max_hp:
+        type: integer
+      type:
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact: {}
@@ -78,7 +104,7 @@ paths:
       - system
   /api/map/zones:
     get:
-      description: Compute zones from coordinate, ensure monsters spawned, return
+      description: Compute zone from coordinate, ensure monsters spawned, return all
         monsters in zone
       parameters:
       - description: Latitude
@@ -97,10 +123,21 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties: true
+            $ref: '#/definitions/handlers.ZoneResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
             type: object
         "401":
           description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
           schema:
             additionalProperties:
               type: string

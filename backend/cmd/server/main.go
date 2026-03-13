@@ -47,12 +47,16 @@ func main() {
 	// Health check
 	r.GET("/api/health", handlers.Health)
 
-	// API routes
+	// Public routes
 	r.POST("/api/player/init", handlers.InitPlayer)
-	r.GET("/api/map/zones", handlers.GetZones)
-	r.POST("/api/character/deploy", handlers.DeployCharacter)
 
-	// WebSocket
+	// Protected routes (require Bearer token)
+	auth := r.Group("/")
+	auth.Use(middleware.SessionAuth())
+	auth.GET("/api/map/zones", handlers.GetZones)
+	auth.POST("/api/character/deploy", handlers.DeployCharacter)
+
+	// WebSocket (token validated in handler via query param)
 	r.GET("/ws", handlers.WebSocketHandler)
 
 	// Swagger docs

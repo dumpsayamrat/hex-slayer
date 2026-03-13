@@ -105,7 +105,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Compute zones from coordinate, ensure monsters spawned, return monsters in zone",
+                "description": "Compute zone from coordinate, ensure monsters spawned, return all monsters in zone",
                 "produces": [
                     "application/json"
                 ],
@@ -133,12 +133,29 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
+                            "$ref": "#/definitions/handlers.ZoneResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
                             "type": "object",
-                            "additionalProperties": true
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -201,6 +218,46 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "sessionToken": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ZoneResponse": {
+            "type": "object",
+            "properties": {
+                "h3_zone": {
+                    "type": "string"
+                },
+                "monsters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.ZoneMonsterResponse"
+                    }
+                }
+            }
+        },
+        "services.ZoneMonsterResponse": {
+            "type": "object",
+            "properties": {
+                "current_hp": {
+                    "type": "integer"
+                },
+                "h3_index": {
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_alive": {
+                    "type": "boolean"
+                },
+                "max_hp": {
+                    "type": "integer"
+                },
+                "type": {
                     "type": "string"
                 }
             }

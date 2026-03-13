@@ -4,6 +4,9 @@ import (
 	"log"
 	"net/http"
 
+	"hexslayer/internal/db"
+	"hexslayer/internal/models"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -22,7 +25,12 @@ func WebSocketHandler(c *gin.Context) {
 		return
 	}
 
-	// TODO: validate session token against DB
+	// Validate session token against DB
+	var player models.Player
+	if err := db.DB.Where("session_token = ?", token).First(&player).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session token"})
+		return
+	}
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
