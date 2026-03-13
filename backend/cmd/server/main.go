@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	_ "hexslayer/docs"
 	"hexslayer/internal/db"
 	"hexslayer/internal/game"
 	"hexslayer/internal/handlers"
@@ -10,8 +11,18 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+// @title HexSlayer API
+// @version 1.0
+// @description Idle geo-based monster hunting game API
+// @host localhost:8080
+// @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 func main() {
 	// Initialize database (migrate + seed)
 	db.Init()
@@ -43,6 +54,9 @@ func main() {
 
 	// WebSocket
 	r.GET("/ws", handlers.WebSocketHandler)
+
+	// Swagger docs
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	log.Println("starting hexslayer server on :8080")
 	if err := r.Run(":8080"); err != nil {

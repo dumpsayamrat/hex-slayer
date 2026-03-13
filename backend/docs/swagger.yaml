@@ -1,0 +1,137 @@
+basePath: /
+definitions:
+  handlers.DeployCharacterRequest:
+    properties:
+      h3_zone:
+        type: string
+    required:
+    - h3_zone
+    type: object
+  handlers.InitPlayerResponse:
+    properties:
+      name:
+        type: string
+      playerId:
+        type: string
+      sessionToken:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Idle geo-based monster hunting game API
+  title: HexSlayer API
+  version: "1.0"
+paths:
+  /api/character/deploy:
+    post:
+      consumes:
+      - application/json
+      description: Deploy a new character to the specified H3 zone
+      parameters:
+      - description: Deploy request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.DeployCharacterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Deploy a character to a zone
+      tags:
+      - character
+  /api/health:
+    get:
+      description: Returns server status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - system
+  /api/map/zones:
+    get:
+      description: Compute zones from coordinate, ensure monsters spawned, return
+        monsters in zone
+      parameters:
+      - description: Latitude
+        in: query
+        name: lat
+        required: true
+        type: number
+      - description: Longitude
+        in: query
+        name: lng
+        required: true
+        type: number
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get map zones
+      tags:
+      - map
+  /api/player/init:
+    post:
+      description: Creates a new player with a session token. No request body needed.
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.InitPlayerResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a new player
+      tags:
+      - player
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
