@@ -151,7 +151,6 @@ res-6 zone
 | id | string UUID PK | |
 | session_token | string | unique, validated on every WS message |
 | name | string | default "Adventurer", not unique |
-| kills | int | total monster kills |
 | created_at | timestamp | |
 
 ---

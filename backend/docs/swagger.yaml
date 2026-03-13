@@ -7,6 +7,31 @@ definitions:
     required:
     - h3_zone
     type: object
+  handlers.DeployCharacterResponse:
+    properties:
+      base_damage:
+        type: integer
+      crit_chance:
+        type: number
+      crit_multiplier:
+        type: number
+      damage_amp:
+        type: number
+      damage_reduction:
+        type: number
+      h3_index:
+        type: string
+      h3_zone:
+        type: string
+      hp:
+        type: integer
+      id:
+        type: string
+      max_hp:
+        type: integer
+      name:
+        type: string
+    type: object
   handlers.InitPlayerResponse:
     properties:
       name:
@@ -53,7 +78,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Deploy a new character to the specified H3 zone
+      description: Deploy a new character with randomized stats to the specified H3
+        zone. Max 2 alive characters per player.
       parameters:
       - description: Deploy request
         in: body
@@ -64,12 +90,10 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
+        "201":
+          description: Created
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handlers.DeployCharacterResponse'
         "400":
           description: Bad Request
           schema:
@@ -78,6 +102,12 @@ paths:
             type: object
         "401":
           description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
           schema:
             additionalProperties:
               type: string

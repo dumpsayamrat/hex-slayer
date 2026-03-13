@@ -22,7 +22,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deploy a new character to the specified H3 zone",
+                "description": "Deploy a new character with randomized stats to the specified H3 zone. Max 2 alive characters per player.",
                 "consumes": [
                     "application/json"
                 ],
@@ -45,13 +45,10 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Created",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/handlers.DeployCharacterResponse"
                         }
                     },
                     "400": {
@@ -65,6 +62,15 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -204,6 +210,44 @@ const docTemplate = `{
             ],
             "properties": {
                 "h3_zone": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.DeployCharacterResponse": {
+            "type": "object",
+            "properties": {
+                "base_damage": {
+                    "type": "integer"
+                },
+                "crit_chance": {
+                    "type": "number"
+                },
+                "crit_multiplier": {
+                    "type": "number"
+                },
+                "damage_amp": {
+                    "type": "number"
+                },
+                "damage_reduction": {
+                    "type": "number"
+                },
+                "h3_index": {
+                    "type": "string"
+                },
+                "h3_zone": {
+                    "type": "string"
+                },
+                "hp": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "max_hp": {
+                    "type": "integer"
+                },
+                "name": {
                     "type": "string"
                 }
             }
