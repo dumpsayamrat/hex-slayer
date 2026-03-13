@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+hexslayer.db
+hexslayer.db-shm
+hexslayer.db-wal
+*.exe
+tmp/
