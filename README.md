@@ -2,7 +2,7 @@
 
 A real-time idle geo-based monster hunting game built with Go and React. Characters autonomously wander an H3 hex-grid world, detect nearby monsters, pursue them, and engage in turn-based combat — all streamed live to the browser over WebSocket.
 
-### [Live Demo](https://hexslayer.dumpsayamrat.com)
+### [Live Demo — hexslayer.dumpsayamrat.com](https://hexslayer.dumpsayamrat.com)
 
 ## What It Does
 
