@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"hexslayer/internal/db"
+	"hexslayer/internal/util"
 	"hexslayer/internal/models"
 	"hexslayer/internal/ws"
 
@@ -75,6 +76,10 @@ func WebSocketHandler(c *gin.Context) {
 				conn.SendJSON(gin.H{"type": "error", "message": "h3_zone required"})
 				continue
 			}
+			if err := util.ValidateZone(zone); err != nil {
+				conn.SendJSON(gin.H{"type": "error", "message": err.Error()})
+				continue
+			}
 			ws.Hub.Subscribe("zone:"+zone, conn)
 			conn.SendJSON(gin.H{"type": "subscribed", "h3_zone": zone})
 
@@ -92,3 +97,4 @@ func WebSocketHandler(c *gin.Context) {
 		}
 	}
 }
+

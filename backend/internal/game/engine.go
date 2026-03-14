@@ -56,13 +56,23 @@ func (e *Engine) runZoneLoop(zone string, stop chan struct{}) {
 	ticker := time.NewTicker(config.TickIntervalSeconds * time.Second)
 	defer ticker.Stop()
 
+	maxTicks := (config.ZoneMaxDurationMins * 60) / config.TickIntervalSeconds
+	tickCount := 0
+
 	for {
 		select {
 		case <-stop:
 			return
 		case <-ticker.C:
+			tickCount++
+			if tickCount > maxTicks {
+				e.mu.Lock()
+				delete(e.active, zone)
+				e.mu.Unlock()
+				log.Printf("game engine: stopped zone loop %s (hit %d min limit)", zone, config.ZoneMaxDurationMins)
+				return
+			}
 			if !e.tickZone(zone) {
-				// No alive characters — stop this zone loop
 				e.mu.Lock()
 				delete(e.active, zone)
 				e.mu.Unlock()
