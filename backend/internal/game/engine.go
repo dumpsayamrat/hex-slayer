@@ -19,6 +19,9 @@ type Engine struct {
 	mu     sync.Mutex
 }
 
+// GameEngine is the global engine instance, set by main.
+var GameEngine *Engine
+
 func NewEngine() *Engine {
 	return &Engine{
 		active: make(map[string]chan struct{}),
@@ -26,16 +29,20 @@ func NewEngine() *Engine {
 }
 
 func (e *Engine) Start() {
-	ws.Hub.OnFirstSubscribe = e.onFirstSubscribe
-	log.Println("game engine: ready (zone loops start on first subscriber)")
+	ws.Hub.OnSubscribe = e.onSubscribe
+	log.Println("game engine: ready (zone loops start on subscriber)")
 }
 
-func (e *Engine) onFirstSubscribe(topic string) {
+func (e *Engine) onSubscribe(topic string) {
 	zone := topicToZone(topic)
 	if zone == "" {
 		return
 	}
+	e.EnsureZoneLoop(zone)
+}
 
+// EnsureZoneLoop starts a zone tick loop if one isn't already running.
+func (e *Engine) EnsureZoneLoop(zone string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

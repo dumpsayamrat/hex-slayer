@@ -26,9 +26,9 @@ func main() {
 	// Initialize database (migrate + seed)
 	db.Init()
 
-	// Start game engine (stub)
-	engine := game.NewEngine()
-	engine.Start()
+	// Start game engine
+	game.GameEngine = game.NewEngine()
+	game.GameEngine.Start()
 
 	r := gin.Default()
 

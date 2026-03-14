@@ -18,6 +18,8 @@ type hub struct {
 
 	// OnFirstSubscribe is called when a topic goes from 0→1 subscribers.
 	OnFirstSubscribe func(topic string)
+	// OnSubscribe is called on every subscribe.
+	OnSubscribe func(topic string)
 }
 
 // Subscribe adds a conn to a topic.
@@ -35,6 +37,9 @@ func (h *hub) Subscribe(topic string, c *Conn) {
 
 	if wasEmpty && h.OnFirstSubscribe != nil {
 		h.OnFirstSubscribe(topic)
+	}
+	if h.OnSubscribe != nil {
+		h.OnSubscribe(topic)
 	}
 }
 

@@ -41,6 +41,10 @@ function App() {
         console.log(`%c[WS] character_died %c${msg.character_id.slice(0,8)} killed by ${msg.killed_by}`, 'color:#dc2626;font-weight:bold', 'color:#fca5a5')
         dispatch({ type: 'CHARACTER_DIED', character_id: msg.character_id, killed_by: msg.killed_by })
         break
+      case 'char_deployed':
+        console.log(`%c[WS] char_deployed %c${msg.name} (${msg.id.slice(0,8)})`, 'color:#22c55e;font-weight:bold', 'color:#86efac')
+        dispatch({ type: 'CHAR_DEPLOYED', character: msg })
+        break
     }
   }, [])
 

@@ -3,8 +3,10 @@ package handlers
 import (
 	"net/http"
 
+	"hexslayer/internal/game"
 	"hexslayer/internal/middleware"
 	"hexslayer/internal/services"
+	"hexslayer/internal/ws"
 
 	"github.com/gin-gonic/gin"
 )
@@ -58,6 +60,21 @@ func DeployCharacter(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Ensure the zone tick loop is running
+	game.GameEngine.EnsureZoneLoop(char.H3Zone)
+
+	// Broadcast to all zone subscribers
+	ws.Hub.Broadcast("zone:"+char.H3Zone, map[string]interface{}{
+		"type":      "char_deployed",
+		"id":        char.ID,
+		"name":      char.Name,
+		"player_id": char.PlayerID,
+		"h3_zone":   char.H3Zone,
+		"h3_index":  char.H3Index,
+		"hp":        char.HP,
+		"max_hp":    char.MaxHP,
+	})
 
 	c.JSON(http.StatusCreated, DeployCharacterResponse{
 		ID:              char.ID,

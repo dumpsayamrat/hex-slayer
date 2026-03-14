@@ -123,8 +123,9 @@ export function gameReducer(state, action) {
       return { ...state, characters, combatLogs }
     }
 
-    // Add newly deployed character
+    // Add newly deployed character (skip if already exists)
     case 'CHAR_DEPLOYED': {
+      if (state.characters.find(c => c.id === action.character.id)) return state
       return { ...state, characters: [...state.characters, action.character] }
     }
 
