@@ -6,27 +6,37 @@ import ZoneHex from './ZoneHex'
 import 'leaflet/dist/leaflet.css'
 
 const BANGKOK_CENTER = [13.7563, 100.5018]
-const MARKER_SIZE = 28
+const MONSTER_SIZE = 28
+const CHAR_SIZE = 40
 
-function makeIcon(path) {
+function makeIcon(path, size) {
   return L.icon({
     iconUrl: path,
-    iconSize: [MARKER_SIZE, MARKER_SIZE],
-    iconAnchor: [MARKER_SIZE / 2, MARKER_SIZE / 2],
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   })
 }
 
 const monsterIcons = {}
 function getMonsterIcon(iconFile) {
   if (!monsterIcons[iconFile]) {
-    monsterIcons[iconFile] = makeIcon(`/markers/${iconFile}`)
+    monsterIcons[iconFile] = makeIcon(`/markers/${iconFile}`, MONSTER_SIZE)
   }
   return monsterIcons[iconFile]
 }
 
+function makeCharIcon(path) {
+  return L.divIcon({
+    html: `<div style="width:${CHAR_SIZE}px;height:${CHAR_SIZE}px;border:3px solid #facc15;border-radius:50%;background:#000;display:flex;align-items:center;justify-content:center;box-shadow:0 0 8px rgba(250,204,21,0.6)"><img src="${path}" style="width:${CHAR_SIZE - 10}px;height:${CHAR_SIZE - 10}px;border-radius:50%" /></div>`,
+    iconSize: [CHAR_SIZE, CHAR_SIZE],
+    iconAnchor: [CHAR_SIZE / 2, CHAR_SIZE / 2],
+    className: '',
+  })
+}
+
 const charIcons = [
-  makeIcon('/markers/char-1.png'),
-  makeIcon('/markers/char-2.png'),
+  makeCharIcon('/markers/char-1.png'),
+  makeCharIcon('/markers/char-2.png'),
 ]
 
 function FitZone({ boundary }) {
@@ -59,14 +69,11 @@ function MapClickHandler({ picking, onMapClick }) {
   return null
 }
 
-function Map({ zone, picking, onMapClick }) {
+function Map({ zoneId, monsters = [], characters = [], picking, onMapClick }) {
   const boundary = useMemo(() => {
-    if (!zone?.h3_zone) return null
-    return cellToBoundary(zone.h3_zone)
-  }, [zone?.h3_zone])
-
-  const monsters = zone?.monsters || []
-  const characters = zone?.characters || []
+    if (!zoneId) return null
+    return cellToBoundary(zoneId)
+  }, [zoneId])
 
   return (
     <MapContainer
@@ -84,7 +91,7 @@ function Map({ zone, picking, onMapClick }) {
 
       {boundary && (
         <>
-          <ZoneHex boundary={boundary} color="#4ade80" label={zone.h3_zone} />
+          <ZoneHex boundary={boundary} color="#4ade80" label={zoneId} />
           <FitZone boundary={boundary} />
         </>
       )}
@@ -101,6 +108,7 @@ function Map({ zone, picking, onMapClick }) {
       })}
 
       {characters.map((c, i) => {
+        if (c.hp <= 0) return null
         const [lat, lng] = cellToLatLng(c.h3_index)
         return (
           <Marker key={c.id} position={[lat, lng]} icon={charIcons[i % 2]}>
