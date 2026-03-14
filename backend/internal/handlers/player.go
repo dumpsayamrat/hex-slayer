@@ -3,8 +3,6 @@ package handlers
 import (
 	"net/http"
 
-	"hexslayer/internal/services"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,8 +20,8 @@ type InitPlayerResponse struct {
 // @Success 201 {object} InitPlayerResponse
 // @Failure 500 {object} map[string]string
 // @Router /api/player/init [post]
-func InitPlayer(c *gin.Context) {
-	player, err := services.CreatePlayer()
+func (h *Handler) InitPlayer(c *gin.Context) {
+	player, err := h.Players.Create()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create player"})
 		return

@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"hexslayer/internal/db"
 	"hexslayer/internal/models"
 	"hexslayer/internal/services"
 
@@ -22,9 +21,9 @@ type ZoneCharacterResponse struct {
 
 // ZoneResponse is the response for GET /api/map/zones.
 type ZoneResponse struct {
-	H3Zone     string                        `json:"h3_zone"`
-	Monsters   []services.ZoneMonsterResponse `json:"monsters"`
-	Characters []ZoneCharacterResponse        `json:"characters"`
+	H3Zone     string                 `json:"h3_zone"`
+	Monsters   []services.ZoneMonsterResponse  `json:"monsters"`
+	Characters []ZoneCharacterResponse `json:"characters"`
 }
 
 // GetZones godoc
@@ -40,7 +39,7 @@ type ZoneResponse struct {
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/map/zones [get]
-func GetZones(c *gin.Context) {
+func (h *Handler) GetZones(c *gin.Context) {
 	latStr := c.Query("lat")
 	lngStr := c.Query("lng")
 
@@ -61,7 +60,7 @@ func GetZones(c *gin.Context) {
 		return
 	}
 
-	zoneStr, monsters, err := services.GetOrCreateZoneMonsters(lat, lng)
+	zoneStr, monsters, err := h.Zones.GetOrCreateMonsters(lat, lng)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load zone"})
 		return
@@ -69,16 +68,16 @@ func GetZones(c *gin.Context) {
 
 	// Load alive characters in this zone
 	var chars []models.Character
-	db.DB.Where("h3_zone = ? AND is_alive = true", zoneStr).Find(&chars)
+	h.DB.Where("h3_zone = ? AND is_alive = true", zoneStr).Find(&chars)
 	charData := make([]ZoneCharacterResponse, len(chars))
-	for i, c := range chars {
+	for i, ch := range chars {
 		charData[i] = ZoneCharacterResponse{
-			ID:       c.ID,
-			Name:     c.Name,
-			HP:       c.HP,
-			MaxHP:    c.MaxHP,
-			PlayerID: c.PlayerID,
-			H3Index:  c.H3Index,
+			ID:       ch.ID,
+			Name:     ch.Name,
+			HP:       ch.HP,
+			MaxHP:    ch.MaxHP,
+			PlayerID: ch.PlayerID,
+			H3Index:  ch.H3Index,
 		}
 	}
 

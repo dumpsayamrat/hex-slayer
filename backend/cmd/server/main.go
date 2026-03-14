@@ -8,6 +8,8 @@ import (
 	"hexslayer/internal/game"
 	"hexslayer/internal/handlers"
 	"hexslayer/internal/middleware"
+	"hexslayer/internal/services"
+	"hexslayer/internal/ws"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -23,34 +25,35 @@ import (
 // @in header
 // @name Authorization
 func main() {
-	// Initialize database (migrate + seed)
-	db.Init()
+	// 1. Infrastructure
+	database := db.Init()
+	hub := ws.NewHub()
 
-	// Start game engine
-	game.GameEngine = game.NewEngine()
-	game.GameEngine.Start()
+	// 2. Services
+	playerSvc := services.NewPlayerService(database)
+	zoneSvc := services.NewZoneService(database)
+	charSvc := services.NewCharacterService(database)
 
+	// 3. Game engine
+	engine := game.NewEngine(database, hub)
+	engine.Start()
+
+	// 4. Handlers
+	h := handlers.New(database, hub, engine, playerSvc, zoneSvc, charSvc)
+
+	// 5. Router
 	r := gin.Default()
-
-	// Rate limiting middleware
 	r.Use(middleware.RateLimit())
 
-	// Health check
-	r.GET("/api/health", handlers.Health)
+	r.GET("/api/health", h.Health)
+	r.POST("/api/player/init", h.InitPlayer)
 
-	// Public routes
-	r.POST("/api/player/init", handlers.InitPlayer)
-
-	// Protected routes (require Bearer token)
 	auth := r.Group("/")
-	auth.Use(middleware.SessionAuth())
-	auth.GET("/api/map/zones", handlers.GetZones)
-	auth.POST("/api/character/deploy", handlers.DeployCharacter)
+	auth.Use(middleware.SessionAuth(database))
+	auth.GET("/api/map/zones", h.GetZones)
+	auth.POST("/api/character/deploy", h.DeployCharacter)
 
-	// WebSocket (token validated in handler via query param)
-	r.GET("/ws", handlers.WebSocketHandler)
-
-	// Swagger docs
+	r.GET("/ws", h.WebSocketHandler)
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	log.Println("starting hexslayer server on :8080")

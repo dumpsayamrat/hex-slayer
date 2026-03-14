@@ -9,16 +9,13 @@ import (
 	"gorm.io/gorm"
 )
 
-var DB *gorm.DB
-
-func Init() {
-	var err error
-	DB, err = gorm.Open(sqlite.Open("hexslayer.db"), &gorm.Config{})
+func Init() *gorm.DB {
+	db, err := gorm.Open(sqlite.Open("hexslayer.db"), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
-	sqlDB, err := DB.DB()
+	sqlDB, err := db.DB()
 	if err != nil {
 		log.Fatalf("failed to get underlying sql.DB: %v", err)
 	}
@@ -27,12 +24,14 @@ func Init() {
 	sqlDB.Exec("PRAGMA journal_mode=WAL")
 	sqlDB.Exec("PRAGMA synchronous=NORMAL")
 
-	migrate()
-	seed()
+	migrate(db)
+	seed(db)
+
+	return db
 }
 
-func migrate() {
-	err := DB.AutoMigrate(
+func migrate(db *gorm.DB) {
+	err := db.AutoMigrate(
 		&models.MonsterType{},
 		&models.MapMonster{},
 		&models.Player{},
@@ -45,9 +44,9 @@ func migrate() {
 	log.Println("database migrated successfully")
 }
 
-func seed() {
+func seed(db *gorm.DB) {
 	var count int64
-	DB.Model(&models.MonsterType{}).Count(&count)
+	db.Model(&models.MonsterType{}).Count(&count)
 	if count > 0 {
 		log.Println("monster_types already seeded, skipping")
 		return
@@ -61,7 +60,7 @@ func seed() {
 		{Name: "Dragon", BaseDamage: 35, DamageAmp: 1.3, DamageReduction: 0.25, CritChance: 0.15, CritMultiplier: 1.8, MaxHP: 500, Icon: "dragon.png"},
 	}
 
-	if err := DB.Create(&monsterTypes).Error; err != nil {
+	if err := db.Create(&monsterTypes).Error; err != nil {
 		log.Fatalf("failed to seed monster types: %v", err)
 	}
 	log.Println("seeded 5 monster types")

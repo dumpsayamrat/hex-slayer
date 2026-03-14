@@ -1,19 +1,27 @@
 package services
 
 import (
-	"hexslayer/internal/db"
 	"hexslayer/internal/models"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-func CreatePlayer() (*models.Player, error) {
+type PlayerService struct {
+	db *gorm.DB
+}
+
+func NewPlayerService(db *gorm.DB) *PlayerService {
+	return &PlayerService{db: db}
+}
+
+func (s *PlayerService) Create() (*models.Player, error) {
 	player := models.Player{
 		ID:           uuid.New().String(),
 		SessionToken: uuid.New().String(),
 	}
 
-	if err := db.DB.Create(&player).Error; err != nil {
+	if err := s.db.Create(&player).Error; err != nil {
 		return nil, err
 	}
 

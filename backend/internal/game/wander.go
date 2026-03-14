@@ -5,7 +5,6 @@ import (
 	"math/rand"
 
 	"hexslayer/internal/config"
-	"hexslayer/internal/db"
 	"hexslayer/internal/models"
 
 	h3 "github.com/uber/h3-go/v4"
@@ -61,13 +60,13 @@ func wander(char *models.Character) string {
 // wanderAndEmit performs a wander step, persists the move to DB,
 // and returns events to broadcast. Used after kills so the character
 // walks away before scanning for the next fight.
-func wanderAndEmit(char *models.Character) []map[string]interface{} {
+func (e *Engine) wanderAndEmit(char *models.Character) []map[string]interface{} {
 	newIndex := wander(char)
 	if newIndex == char.H3Index {
 		return nil
 	}
 	char.H3Index = newIndex
-	db.DB.Model(char).Updates(map[string]interface{}{
+	e.db.Model(char).Updates(map[string]interface{}{
 		"h3_index":          newIndex,
 		"wander_bearing":    char.WanderBearing,
 		"target_monster_id": nil,

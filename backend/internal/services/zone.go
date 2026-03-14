@@ -5,11 +5,11 @@ import (
 	"math/rand"
 
 	"hexslayer/internal/config"
-	"hexslayer/internal/db"
 	"hexslayer/internal/models"
 
 	"github.com/google/uuid"
 	h3 "github.com/uber/h3-go/v4"
+	"gorm.io/gorm"
 )
 
 // ZoneMonsterResponse is the lean monster data sent to the frontend.
@@ -23,9 +23,17 @@ type ZoneMonsterResponse struct {
 	IsAlive   bool   `json:"is_alive"`
 }
 
-// GetOrCreateZoneMonsters computes the res-6 zone from lat/lng,
+type ZoneService struct {
+	db *gorm.DB
+}
+
+func NewZoneService(db *gorm.DB) *ZoneService {
+	return &ZoneService{db: db}
+}
+
+// GetOrCreateMonsters computes the res-6 zone from lat/lng,
 // ensures monsters are spawned up to cap, and returns all monsters in the zone.
-func GetOrCreateZoneMonsters(lat, lng float64) (string, []ZoneMonsterResponse, error) {
+func (s *ZoneService) GetOrCreateMonsters(lat, lng float64) (string, []ZoneMonsterResponse, error) {
 	ll := h3.NewLatLng(lat, lng)
 	zone, err := h3.LatLngToCell(ll, config.ZoneResolution)
 	if err != nil {
@@ -35,7 +43,7 @@ func GetOrCreateZoneMonsters(lat, lng float64) (string, []ZoneMonsterResponse, e
 
 	// Count living monsters in this zone
 	var aliveCount int64
-	db.DB.Model(&models.MapMonster{}).
+	s.db.Model(&models.MapMonster{}).
 		Where("h3_zone = ? AND is_alive = true", zoneStr).
 		Count(&aliveCount)
 
@@ -46,14 +54,14 @@ func GetOrCreateZoneMonsters(lat, lng float64) (string, []ZoneMonsterResponse, e
 	log.Printf("zone %s: aliveCount=%d threshold=%d toSpawn=%d", zoneStr, aliveCount, threshold, toSpawn)
 
 	if int(aliveCount) < threshold {
-		if err := spawnMonsters(zoneStr, zone, toSpawn); err != nil {
+		if err := s.spawnMonsters(zoneStr, zone, toSpawn); err != nil {
 			return "", nil, err
 		}
 	}
 
 	// Fetch all alive monsters in zone with their type
 	var monsters []models.MapMonster
-	if err := db.DB.Preload("MonsterType").
+	if err := s.db.Preload("MonsterType").
 		Where("h3_zone = ? AND is_alive = true", zoneStr).
 		Find(&monsters).Error; err != nil {
 		return "", nil, err
@@ -136,9 +144,9 @@ func getAvailableCells(zone h3.Cell) (inner, outer []h3.Cell) {
 	return inner, outer
 }
 
-func spawnMonsters(zoneStr string, zone h3.Cell, count int) error {
+func (s *ZoneService) spawnMonsters(zoneStr string, zone h3.Cell, count int) error {
 	var monsterTypes []models.MonsterType
-	if err := db.DB.Find(&monsterTypes).Error; err != nil {
+	if err := s.db.Find(&monsterTypes).Error; err != nil {
 		return err
 	}
 	if len(monsterTypes) == 0 {
@@ -152,7 +160,7 @@ func spawnMonsters(zoneStr string, zone h3.Cell, count int) error {
 
 	// Load occupied cells (alive monsters) to filter them out
 	var occupied []string
-	db.DB.Model(&models.MapMonster{}).
+	s.db.Model(&models.MapMonster{}).
 		Where("h3_zone = ? AND is_alive = true", zoneStr).
 		Pluck("h3_index", &occupied)
 	occupiedSet := make(map[string]bool, len(occupied))
@@ -213,5 +221,5 @@ func spawnMonsters(zoneStr string, zone h3.Cell, count int) error {
 		})
 	}
 
-	return db.DB.CreateInBatches(monsters, 100).Error
+	return s.db.CreateInBatches(monsters, 100).Error
 }

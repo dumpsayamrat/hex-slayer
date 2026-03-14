@@ -5,14 +5,13 @@ import (
 	"math/rand"
 	"time"
 
-	"hexslayer/internal/db"
+	"hexslayer/internal/config"
 	"hexslayer/internal/models"
 
 	"github.com/google/uuid"
 	h3 "github.com/uber/h3-go/v4"
+	"gorm.io/gorm"
 )
-
-const MaxCharactersPerPlayer = 2
 
 var firstNames = []string{
 	"Shadow", "Storm", "Iron", "Frost", "Blaze",
@@ -36,18 +35,26 @@ func randRangeInt(min, max int) int {
 	return min + rand.Intn(max-min+1)
 }
 
-func DeployCharacter(playerID, h3Zone string) (*models.Character, error) {
+type CharacterService struct {
+	db *gorm.DB
+}
+
+func NewCharacterService(db *gorm.DB) *CharacterService {
+	return &CharacterService{db: db}
+}
+
+func (s *CharacterService) Deploy(playerID, h3Zone string) (*models.Character, error) {
 	var aliveCount int64
-	db.DB.Model(&models.Character{}).
+	s.db.Model(&models.Character{}).
 		Where("player_id = ? AND is_alive = true", playerID).
 		Count(&aliveCount)
 
-	if aliveCount >= MaxCharactersPerPlayer {
-		return nil, fmt.Errorf("max %d alive characters allowed", MaxCharactersPerPlayer)
+	if aliveCount >= config.MaxCharactersAlive {
+		return nil, fmt.Errorf("max %d alive characters allowed", config.MaxCharactersAlive)
 	}
 
 	var monsterCount int64
-	db.DB.Model(&models.MapMonster{}).
+	s.db.Model(&models.MapMonster{}).
 		Where("h3_zone = ? AND is_alive = true", h3Zone).
 		Count(&monsterCount)
 
@@ -79,7 +86,7 @@ func DeployCharacter(playerID, h3Zone string) (*models.Character, error) {
 		DeployedAt:      time.Now(),
 	}
 
-	if err := db.DB.Create(&char).Error; err != nil {
+	if err := s.db.Create(&char).Error; err != nil {
 		return nil, err
 	}
 

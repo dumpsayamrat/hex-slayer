@@ -3,10 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"hexslayer/internal/game"
 	"hexslayer/internal/middleware"
-	"hexslayer/internal/services"
-	"hexslayer/internal/ws"
 
 	"github.com/gin-gonic/gin"
 )
@@ -42,7 +39,7 @@ type DeployCharacterResponse struct {
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/character/deploy [post]
-func DeployCharacter(c *gin.Context) {
+func (h *Handler) DeployCharacter(c *gin.Context) {
 	var req DeployCharacterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -55,17 +52,17 @@ func DeployCharacter(c *gin.Context) {
 		return
 	}
 
-	char, err := services.DeployCharacter(player.ID, req.H3Zone)
+	char, err := h.Characters.Deploy(player.ID, req.H3Zone)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Ensure the zone tick loop is running
-	game.GameEngine.EnsureZoneLoop(char.H3Zone)
+	h.Engine.EnsureZoneLoop(char.H3Zone)
 
 	// Broadcast to all zone subscribers
-	ws.Hub.Broadcast("zone:"+char.H3Zone, map[string]interface{}{
+	h.Hub.Broadcast("zone:"+char.H3Zone, map[string]interface{}{
 		"type":      "char_deployed",
 		"id":        char.ID,
 		"name":      char.Name,

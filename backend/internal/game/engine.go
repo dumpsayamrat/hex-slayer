@@ -6,30 +6,31 @@ import (
 	"time"
 
 	"hexslayer/internal/config"
-	"hexslayer/internal/db"
 	"hexslayer/internal/models"
 	"hexslayer/internal/ws"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Engine manages the game tick loop — one goroutine per active zone.
 type Engine struct {
+	db     *gorm.DB
+	hub    *ws.Hub
 	active map[string]chan struct{}
 	mu     sync.Mutex
 }
 
-// GameEngine is the global engine instance, set by main.
-var GameEngine *Engine
-
-func NewEngine() *Engine {
+func NewEngine(db *gorm.DB, hub *ws.Hub) *Engine {
 	return &Engine{
+		db:     db,
+		hub:    hub,
 		active: make(map[string]chan struct{}),
 	}
 }
 
 func (e *Engine) Start() {
-	ws.Hub.OnSubscribe = e.onSubscribe
+	e.hub.OnSubscribe = e.onSubscribe
 	log.Println("game engine: ready (zone loops start on subscriber)")
 }
 
@@ -93,7 +94,7 @@ func (e *Engine) tickZone(zone string) bool {
 
 	// Load alive characters in zone
 	var characters []models.Character
-	db.DB.Where("h3_zone = ? AND is_alive = true", zone).Find(&characters)
+	e.db.Where("h3_zone = ? AND is_alive = true", zone).Find(&characters)
 
 	if len(characters) == 0 {
 		return false
@@ -101,7 +102,7 @@ func (e *Engine) tickZone(zone string) bool {
 
 	// Load alive monsters in zone with their type
 	var monsters []models.MapMonster
-	db.DB.Preload("MonsterType").Where("h3_zone = ? AND is_alive = true", zone).Find(&monsters)
+	e.db.Preload("MonsterType").Where("h3_zone = ? AND is_alive = true", zone).Find(&monsters)
 
 	// Build monster lookup by ID
 	monsterByID := make(map[string]*models.MapMonster, len(monsters))
@@ -117,7 +118,7 @@ func (e *Engine) tickZone(zone string) bool {
 		charIDs[i] = c.ID
 	}
 	var engagements []models.CharacterEngagement
-	db.DB.Where("character_id IN ?", charIDs).Find(&engagements)
+	e.db.Where("character_id IN ?", charIDs).Find(&engagements)
 
 	engagementByChar := make(map[string]*models.CharacterEngagement, len(engagements))
 	for i := range engagements {
@@ -143,22 +144,22 @@ func (e *Engine) tickZone(zone string) bool {
 			monster := monsterByID[eng.MonsterID]
 			if monster != nil && monster.IsAlive {
 				engaged[monster.ID] = true
-				logs := doCombat(char, monster)
+				logs := doCombat(e.db, char, monster)
 				events = append(events, logs...)
 
 				if !monster.IsAlive {
 					char.Kills++
-					db.DB.Model(char).Update("kills", char.Kills)
+					e.db.Model(char).Update("kills", char.Kills)
 					events = append(events, map[string]interface{}{
 						"type":       "monster_died",
 						"monster_id": monster.ID,
 						"killed_by":  char.Name,
 					})
-					db.DB.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
+					e.db.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
 					delete(engagementByChar, char.ID)
 					char.TargetMonsterID = nil
 					// Walk away after kill before next fight
-					events = append(events, wanderAndEmit(char)...)
+					events = append(events, e.wanderAndEmit(char)...)
 				}
 				if !char.IsAlive {
 					events = append(events, map[string]interface{}{
@@ -166,17 +167,17 @@ func (e *Engine) tickZone(zone string) bool {
 						"character_id": char.ID,
 						"killed_by":    monster.MonsterType.Name,
 					})
-					db.DB.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
+					e.db.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
 					delete(engagementByChar, char.ID)
 				}
 				continue
 			}
 
 			// Monster dead or gone — walk away
-			db.DB.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
+			e.db.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
 			delete(engagementByChar, char.ID)
 			char.TargetMonsterID = nil
-			events = append(events, wanderAndEmit(char)...)
+			events = append(events, e.wanderAndEmit(char)...)
 		}
 
 		// === STATE: HUNTING (has target, walking toward it) ===
@@ -185,13 +186,13 @@ func (e *Engine) tickZone(zone string) bool {
 			if target == nil || !target.IsAlive || engaged[target.ID] {
 				// Target gone — clear and fall through to scan/wander
 				char.TargetMonsterID = nil
-				db.DB.Model(char).Update("target_monster_id", nil)
+				e.db.Model(char).Update("target_monster_id", nil)
 			} else {
 				// Move one step toward target
 				newIndex, dist := moveToward(char, target)
 				if newIndex != char.H3Index {
 					char.H3Index = newIndex
-					db.DB.Model(char).Updates(map[string]interface{}{
+					e.db.Model(char).Updates(map[string]interface{}{
 						"h3_index":       newIndex,
 						"wander_bearing": char.WanderBearing,
 					})
@@ -211,7 +212,7 @@ func (e *Engine) tickZone(zone string) bool {
 						MonsterID:   target.ID,
 						EngagedAt:   time.Now(),
 					}
-					db.DB.Create(&newEng)
+					e.db.Create(&newEng)
 					engagementByChar[char.ID] = &newEng
 
 					events = append(events, map[string]interface{}{
@@ -220,22 +221,22 @@ func (e *Engine) tickZone(zone string) bool {
 						"monster_id":   target.ID,
 					})
 
-					logs := doCombat(char, target)
+					logs := doCombat(e.db, char, target)
 					events = append(events, logs...)
 
 					if !target.IsAlive {
 						char.Kills++
-						db.DB.Model(char).Update("kills", char.Kills)
+						e.db.Model(char).Update("kills", char.Kills)
 						events = append(events, map[string]interface{}{
 							"type":       "monster_died",
 							"monster_id": target.ID,
 							"killed_by":  char.Name,
 						})
-						db.DB.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
+						e.db.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
 						delete(engagementByChar, char.ID)
 						char.TargetMonsterID = nil
 						// Walk away after kill before next fight
-						events = append(events, wanderAndEmit(char)...)
+						events = append(events, e.wanderAndEmit(char)...)
 					}
 					if !char.IsAlive {
 						events = append(events, map[string]interface{}{
@@ -243,7 +244,7 @@ func (e *Engine) tickZone(zone string) bool {
 							"character_id": char.ID,
 							"killed_by":    target.MonsterType.Name,
 						})
-						db.DB.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
+						e.db.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
 						delete(engagementByChar, char.ID)
 					}
 				}
@@ -256,7 +257,7 @@ func (e *Engine) tickZone(zone string) bool {
 		if target != nil {
 			// Spotted a monster — start hunting
 			char.TargetMonsterID = &target.ID
-			db.DB.Model(char).Update("target_monster_id", target.ID)
+			e.db.Model(char).Update("target_monster_id", target.ID)
 			// Don't move yet, will start walking next tick
 			continue
 		}
@@ -265,7 +266,7 @@ func (e *Engine) tickZone(zone string) bool {
 		newIndex := wander(char)
 		if newIndex != char.H3Index {
 			char.H3Index = newIndex
-			db.DB.Model(char).Updates(map[string]interface{}{
+			e.db.Model(char).Updates(map[string]interface{}{
 				"h3_index":       newIndex,
 				"wander_bearing": char.WanderBearing,
 			})
@@ -279,7 +280,7 @@ func (e *Engine) tickZone(zone string) bool {
 
 	// Broadcast all events
 	for _, evt := range events {
-		ws.Hub.Broadcast(topic, evt)
+		e.hub.Broadcast(topic, evt)
 	}
 
 	return true
@@ -287,7 +288,7 @@ func (e *Engine) tickZone(zone string) bool {
 
 // doCombat runs one round: character hits monster, monster hits character.
 // Updates HP in DB. Returns combat log events.
-func doCombat(char *models.Character, monster *models.MapMonster) []map[string]interface{} {
+func doCombat(db *gorm.DB, char *models.Character, monster *models.MapMonster) []map[string]interface{} {
 	var logs []map[string]interface{}
 
 	charStats := combatantFromCharacter(char)
@@ -299,12 +300,12 @@ func doCombat(char *models.Character, monster *models.MapMonster) []map[string]i
 	if monster.CurrentHP <= 0 {
 		monster.CurrentHP = 0
 		monster.IsAlive = false
-		db.DB.Model(monster).Updates(map[string]interface{}{
+		db.Model(monster).Updates(map[string]interface{}{
 			"current_hp": 0,
 			"is_alive":   false,
 		})
 	} else {
-		db.DB.Model(monster).Update("current_hp", monster.CurrentHP)
+		db.Model(monster).Update("current_hp", monster.CurrentHP)
 	}
 	logs = append(logs, map[string]interface{}{
 		"type":         "combat_log",
@@ -328,13 +329,13 @@ func doCombat(char *models.Character, monster *models.MapMonster) []map[string]i
 			char.HP = 0
 			char.IsAlive = false
 			now := time.Now()
-			db.DB.Model(char).Updates(map[string]interface{}{
+			db.Model(char).Updates(map[string]interface{}{
 				"hp":       0,
 				"is_alive": false,
 				"died_at":  now,
 			})
 		} else {
-			db.DB.Model(char).Update("hp", char.HP)
+			db.Model(char).Update("hp", char.HP)
 		}
 		logs = append(logs, map[string]interface{}{
 			"type":         "combat_log",
