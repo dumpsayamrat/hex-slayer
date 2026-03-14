@@ -4,6 +4,7 @@ import (
 	"log"
 	"math/rand"
 
+	"hexslayer/internal/apperr"
 	"hexslayer/internal/config"
 	"hexslayer/internal/dto"
 	"hexslayer/internal/models"
@@ -27,7 +28,7 @@ func (s *ZoneService) GetOrCreateMonsters(lat, lng float64) (string, []dto.ZoneM
 	ll := h3.NewLatLng(lat, lng)
 	zone, err := h3.LatLngToCell(ll, config.ZoneResolution)
 	if err != nil {
-		return "", nil, err
+		return "", nil, apperr.NewValidation("invalid coordinates: lat=%f lng=%f", lat, lng)
 	}
 	zoneStr := zone.String()
 

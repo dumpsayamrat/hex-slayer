@@ -23,7 +23,7 @@ type InitPlayerResponse struct {
 func (h *Handler) InitPlayer(c *gin.Context) {
 	player, err := h.Players.Create()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create player"})
+		h.respondError(c, err)
 		return
 	}
 

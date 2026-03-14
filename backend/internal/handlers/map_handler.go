@@ -62,7 +62,7 @@ func (h *Handler) GetZones(c *gin.Context) {
 
 	zoneStr, monsters, err := h.Zones.GetOrCreateMonsters(lat, lng)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load zone"})
+		h.respondError(c, err)
 		return
 	}
 

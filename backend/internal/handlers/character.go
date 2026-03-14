@@ -54,7 +54,7 @@ func (h *Handler) DeployCharacter(c *gin.Context) {
 
 	char, err := h.Characters.Deploy(player.ID, req.H3Zone)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.respondError(c, err)
 		return
 	}
 

@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"time"
 
+	"hexslayer/internal/apperr"
 	"hexslayer/internal/config"
 	"hexslayer/internal/models"
 
@@ -45,26 +46,30 @@ func NewCharacterService(db *gorm.DB) *CharacterService {
 
 func (s *CharacterService) Deploy(playerID, h3Zone string) (*models.Character, error) {
 	var aliveCount int64
-	s.db.Model(&models.Character{}).
+	if err := s.db.Model(&models.Character{}).
 		Where("player_id = ? AND is_alive = true", playerID).
-		Count(&aliveCount)
+		Count(&aliveCount).Error; err != nil {
+		return nil, err
+	}
 
 	if aliveCount >= config.MaxCharactersAlive {
-		return nil, fmt.Errorf("max %d alive characters allowed", config.MaxCharactersAlive)
+		return nil, apperr.NewValidation("max %d alive characters allowed", config.MaxCharactersAlive)
 	}
 
 	var monsterCount int64
-	s.db.Model(&models.MapMonster{}).
+	if err := s.db.Model(&models.MapMonster{}).
 		Where("h3_zone = ? AND is_alive = true", h3Zone).
-		Count(&monsterCount)
+		Count(&monsterCount).Error; err != nil {
+		return nil, err
+	}
 
 	if monsterCount == 0 {
-		return nil, fmt.Errorf("no active monsters in zone %s", h3Zone)
+		return nil, apperr.NewValidation("no active monsters in zone %s", h3Zone)
 	}
 
 	zone := h3.CellFromString(h3Zone)
 	if !h3.IsValidIndex(zone) {
-		return nil, fmt.Errorf("invalid h3_zone: %s", h3Zone)
+		return nil, apperr.NewValidation("invalid h3_zone: %s", h3Zone)
 	}
 	cellStr := randomChildCell(zone)
 
