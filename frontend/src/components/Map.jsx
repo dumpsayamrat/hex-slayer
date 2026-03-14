@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { cellToBoundary, cellToLatLng } from 'h3-js'
 import L from 'leaflet'
@@ -8,6 +8,7 @@ import 'leaflet/dist/leaflet.css'
 const BANGKOK_CENTER = [13.7563, 100.5018]
 const MONSTER_SIZE = 28
 const CHAR_SIZE = 40
+const MOVE_DURATION_MS = 1500
 
 function makeIcon(path, size) {
   return L.icon({
@@ -34,10 +35,68 @@ function makeCharIcon(path) {
   })
 }
 
-const charIcons = [
+const charIconDefs = [
   makeCharIcon('/markers/char-1.png'),
   makeCharIcon('/markers/char-2.png'),
 ]
+
+// Imperatively managed marker with smooth animation
+function SmoothCharMarker({ id, position, iconIndex, name, hp, maxHp }) {
+  const map = useMap()
+  const markerRef = useRef(null)
+  const animRef = useRef(null)
+
+  // Create marker on mount, remove on unmount
+  useEffect(() => {
+    const marker = L.marker(position, { icon: charIconDefs[iconIndex % 2] })
+    marker.addTo(map)
+    marker.bindTooltip(`${name} — HP: ${hp}/${maxHp}`)
+    markerRef.current = marker
+
+    return () => {
+      cancelAnimationFrame(animRef.current)
+      map.removeLayer(marker)
+      markerRef.current = null
+    }
+  }, [map, id]) // only recreate if id changes
+
+  // Animate position changes
+  useEffect(() => {
+    const marker = markerRef.current
+    if (!marker) return
+
+    const from = marker.getLatLng()
+    const to = L.latLng(position)
+
+    if (from.lat === to.lat && from.lng === to.lng) return
+
+    const startTime = performance.now()
+    cancelAnimationFrame(animRef.current)
+
+    function step(now) {
+      const t = Math.min((now - startTime) / MOVE_DURATION_MS, 1)
+      const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t // ease in-out quad
+      const lat = from.lat + (to.lat - from.lat) * ease
+      const lng = from.lng + (to.lng - from.lng) * ease
+      marker.setLatLng([lat, lng])
+
+      if (t < 1) {
+        animRef.current = requestAnimationFrame(step)
+      }
+    }
+
+    animRef.current = requestAnimationFrame(step)
+  }, [position[0], position[1]])
+
+  // Update tooltip on HP change
+  useEffect(() => {
+    const marker = markerRef.current
+    if (!marker) return
+    marker.setTooltipContent(`${name} — HP: ${hp}/${maxHp}`)
+  }, [hp, maxHp, name])
+
+  return null
+}
 
 function FitZone({ boundary }) {
   const map = useMap()
@@ -111,11 +170,15 @@ function Map({ zoneId, monsters = [], characters = [], picking, onMapClick }) {
         if (c.hp <= 0) return null
         const [lat, lng] = cellToLatLng(c.h3_index)
         return (
-          <Marker key={c.id} position={[lat, lng]} icon={charIcons[i % 2]}>
-            <Tooltip>
-              {c.name} — HP: {c.hp}/{c.max_hp}
-            </Tooltip>
-          </Marker>
+          <SmoothCharMarker
+            key={c.id}
+            id={c.id}
+            position={[lat, lng]}
+            iconIndex={i}
+            name={c.name}
+            hp={c.hp}
+            maxHp={c.max_hp}
+          />
         )
       })}
     </MapContainer>

@@ -97,9 +97,7 @@ export function gameReducer(state, action) {
 
     // WS: character_died
     case 'CHARACTER_DIED': {
-      const characters = state.characters.map(c =>
-        c.id === action.character_id ? { ...c, hp: 0, is_alive: false, fighting_monster_id: null } : c
-      )
+      const characters = state.characters.filter(c => c.id !== action.character_id)
       const log = { attacker: action.killed_by, defender: '(char died)', damage: 0, is_crit: false, event: 'death' }
       const combatLogs = [log, ...state.combatLogs].slice(0, MAX_LOGS)
       return { ...state, characters, combatLogs }
