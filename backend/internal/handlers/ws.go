@@ -82,6 +82,7 @@ func WebSocketHandler(c *gin.Context) {
 			}
 			ws.Hub.Subscribe("zone:"+zone, conn)
 			conn.SendJSON(gin.H{"type": "subscribed", "h3_zone": zone})
+			sendZoneSnapshot(conn, zone)
 
 		case "unsubscribe_zone":
 			zone, _ := msg["h3_zone"].(string)
@@ -96,5 +97,67 @@ func WebSocketHandler(c *gin.Context) {
 			conn.SendJSON(gin.H{"type": "error", "message": "unknown message type"})
 		}
 	}
+}
+
+// sendZoneSnapshot sends characters and engaged monsters to a single connection.
+// FE already has full monster list from GET /api/map/zones — snapshot only sends
+// monsters currently in combat so FE can sync their HP.
+func sendZoneSnapshot(conn *ws.Conn, zone string) {
+	// Load alive characters
+	var characters []models.Character
+	db.DB.Where("h3_zone = ? AND is_alive = true", zone).Find(&characters)
+
+	// Load engagements for these characters
+	charIDs := make([]string, len(characters))
+	for i, c := range characters {
+		charIDs[i] = c.ID
+	}
+	engagementByChar := make(map[string]string)
+	var engagedMonsterIDs []string
+	if len(charIDs) > 0 {
+		var engagements []models.CharacterEngagement
+		db.DB.Where("character_id IN ?", charIDs).Find(&engagements)
+		for _, e := range engagements {
+			engagementByChar[e.CharacterID] = e.MonsterID
+			engagedMonsterIDs = append(engagedMonsterIDs, e.MonsterID)
+		}
+	}
+
+	charData := make([]gin.H, len(characters))
+	for i, c := range characters {
+		entry := gin.H{
+			"id":        c.ID,
+			"name":      c.Name,
+			"hp":        c.HP,
+			"max_hp":    c.MaxHP,
+			"player_id": c.PlayerID,
+			"h3_index":  c.H3Index,
+		}
+		if monsterID, ok := engagementByChar[c.ID]; ok {
+			entry["fighting_monster_id"] = monsterID
+		}
+		charData[i] = entry
+	}
+
+	// Load only engaged monsters (to sync current HP)
+	var monsterData []gin.H
+	if len(engagedMonsterIDs) > 0 {
+		var monsters []models.MapMonster
+		db.DB.Where("id IN ?", engagedMonsterIDs).Find(&monsters)
+		monsterData = make([]gin.H, len(monsters))
+		for i, m := range monsters {
+			monsterData[i] = gin.H{
+				"id":         m.ID,
+				"current_hp": m.CurrentHP,
+			}
+		}
+	}
+
+	conn.SendJSON(gin.H{
+		"type":       "zone_snapshot",
+		"zone":       zone,
+		"characters": charData,
+		"monsters":   monsterData,
+	})
 }
 

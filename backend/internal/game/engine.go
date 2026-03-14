@@ -9,14 +9,13 @@ import (
 	"hexslayer/internal/db"
 	"hexslayer/internal/models"
 	"hexslayer/internal/ws"
+
+	"github.com/google/uuid"
 )
 
 // Engine manages the game tick loop — one goroutine per active zone.
-// A zone goroutine starts when the first client subscribes.
-// It keeps running as long as there are alive characters in the zone,
-// even if all clients disconnect.
 type Engine struct {
-	active map[string]chan struct{} // stop channel per running zone goroutine
+	active map[string]chan struct{}
 	mu     sync.Mutex
 }
 
@@ -26,13 +25,11 @@ func NewEngine() *Engine {
 	}
 }
 
-// Start registers the subscribe hook on the hub.
 func (e *Engine) Start() {
 	ws.Hub.OnFirstSubscribe = e.onFirstSubscribe
 	log.Println("game engine: ready (zone loops start on first subscriber)")
 }
 
-// onFirstSubscribe is called by the hub when a topic goes from 0→1 subscribers.
 func (e *Engine) onFirstSubscribe(topic string) {
 	zone := topicToZone(topic)
 	if zone == "" {
@@ -83,33 +80,211 @@ func (e *Engine) runZoneLoop(zone string, stop chan struct{}) {
 	}
 }
 
-// tickZone processes one tick for a zone. Returns false if the zone
-// has no alive characters and should stop.
+// tickZone processes one tick. Returns false if no alive characters.
 func (e *Engine) tickZone(zone string) bool {
-	// Check if any alive characters exist in this zone
-	var charCount int64
-	db.DB.Model(&models.Character{}).
-		Where("h3_zone = ? AND is_alive = true", zone).
-		Count(&charCount)
+	topic := "zone:" + zone
 
-	if charCount == 0 {
+	// Load alive characters in zone
+	var characters []models.Character
+	db.DB.Where("h3_zone = ? AND is_alive = true", zone).Find(&characters)
+
+	if len(characters) == 0 {
 		return false
 	}
 
-	topic := "zone:" + zone
+	// Load alive monsters in zone with their type
+	var monsters []models.MapMonster
+	db.DB.Preload("MonsterType").Where("h3_zone = ? AND is_alive = true", zone).Find(&monsters)
 
-	// Mock tick payload
-	ws.Hub.Broadcast(topic, map[string]interface{}{
-		"type": "tick_update",
-		"zone": zone,
-		"mock": true,
-		"ts":   time.Now().UnixMilli(),
-	})
+	// Build monster lookup by ID
+	monsterByID := make(map[string]*models.MapMonster, len(monsters))
+	monsterPtrs := make([]*models.MapMonster, len(monsters))
+	for i := range monsters {
+		monsterByID[monsters[i].ID] = &monsters[i]
+		monsterPtrs[i] = &monsters[i]
+	}
+
+	// Load existing engagements for characters in this zone
+	charIDs := make([]string, len(characters))
+	for i, c := range characters {
+		charIDs[i] = c.ID
+	}
+	var engagements []models.CharacterEngagement
+	db.DB.Where("character_id IN ?", charIDs).Find(&engagements)
+
+	engagementByChar := make(map[string]*models.CharacterEngagement, len(engagements))
+	for i := range engagements {
+		engagementByChar[engagements[i].CharacterID] = &engagements[i]
+	}
+
+	// Track which monsters are engaged this tick (prevents double-targeting)
+	engaged := make(map[string]bool)
+
+	// Collect events to broadcast
+	var events []map[string]interface{}
+
+	for i := range characters {
+		char := &characters[i]
+		eng := engagementByChar[char.ID]
+
+		if eng != nil {
+			monster := monsterByID[eng.MonsterID]
+			if monster != nil && monster.IsAlive {
+				// Continue combat
+				engaged[monster.ID] = true
+				logs := doCombat(char, monster)
+				events = append(events, logs...)
+
+				if !monster.IsAlive {
+					events = append(events, map[string]interface{}{
+						"type":       "monster_died",
+						"monster_id": monster.ID,
+						"killed_by":  char.Name,
+					})
+					db.DB.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
+					delete(engagementByChar, char.ID)
+				}
+				if !char.IsAlive {
+					events = append(events, map[string]interface{}{
+						"type":         "character_died",
+						"character_id": char.ID,
+						"killed_by":    monster.MonsterType.Name,
+					})
+					db.DB.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
+					delete(engagementByChar, char.ID)
+				}
+				continue
+			}
+
+			// Monster dead or gone — clear engagement
+			db.DB.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
+			delete(engagementByChar, char.ID)
+		}
+
+		if !char.IsAlive {
+			continue
+		}
+
+		// Find random free monster
+		target := findRandomFreeMonster(char, monsterPtrs, engaged)
+		if target != nil {
+			engaged[target.ID] = true
+			newEng := models.CharacterEngagement{
+				ID:          uuid.New().String(),
+				CharacterID: char.ID,
+				MonsterID:   target.ID,
+				EngagedAt:   time.Now(),
+			}
+			db.DB.Create(&newEng)
+			engagementByChar[char.ID] = &newEng
+
+			events = append(events, map[string]interface{}{
+				"type":         "combat_engage",
+				"character_id": char.ID,
+				"monster_id":   target.ID,
+			})
+
+			logs := doCombat(char, target)
+			events = append(events, logs...)
+
+			if !target.IsAlive {
+				events = append(events, map[string]interface{}{
+					"type":       "monster_died",
+					"monster_id": target.ID,
+					"killed_by":  char.Name,
+				})
+				db.DB.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
+				delete(engagementByChar, char.ID)
+			}
+			if !char.IsAlive {
+				events = append(events, map[string]interface{}{
+					"type":         "character_died",
+					"character_id": char.ID,
+					"killed_by":    target.MonsterType.Name,
+				})
+				db.DB.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
+				delete(engagementByChar, char.ID)
+			}
+		} else {
+			// Wander
+			newIndex := wander(char)
+			if newIndex != char.H3Index {
+				char.H3Index = newIndex
+				db.DB.Model(char).Update("h3_index", newIndex)
+				events = append(events, map[string]interface{}{
+					"type":         "char_move",
+					"character_id": char.ID,
+					"h3_index":     newIndex,
+				})
+			}
+		}
+	}
+
+	// Broadcast all events
+	for _, evt := range events {
+		ws.Hub.Broadcast(topic, evt)
+	}
 
 	return true
 }
 
-// topicToZone extracts the zone hex from a "zone:<hex>" topic string.
+// doCombat runs one round: character hits monster, monster hits character.
+// Updates HP in DB. Returns combat log events.
+func doCombat(char *models.Character, monster *models.MapMonster) []map[string]interface{} {
+	var logs []map[string]interface{}
+
+	charStats := combatantFromCharacter(char)
+	monStats := combatantFromMonster(monster)
+
+	// Character attacks monster
+	hit := attack(charStats, monStats)
+	monster.CurrentHP -= hit.Damage
+	if monster.CurrentHP <= 0 {
+		monster.CurrentHP = 0
+		monster.IsAlive = false
+		db.DB.Model(monster).Updates(map[string]interface{}{
+			"current_hp": 0,
+			"is_alive":   false,
+		})
+	} else {
+		db.DB.Model(monster).Update("current_hp", monster.CurrentHP)
+	}
+	logs = append(logs, map[string]interface{}{
+		"type":     "combat_log",
+		"attacker": char.Name,
+		"defender": monster.MonsterType.Name,
+		"damage":   hit.Damage,
+		"is_crit":  hit.IsCrit,
+	})
+
+	// Monster attacks character (only if both still alive)
+	if monster.IsAlive && char.IsAlive {
+		hit2 := attack(monStats, charStats)
+		char.HP -= hit2.Damage
+		if char.HP <= 0 {
+			char.HP = 0
+			char.IsAlive = false
+			now := time.Now()
+			db.DB.Model(char).Updates(map[string]interface{}{
+				"hp":       0,
+				"is_alive": false,
+				"died_at":  now,
+			})
+		} else {
+			db.DB.Model(char).Update("hp", char.HP)
+		}
+		logs = append(logs, map[string]interface{}{
+			"type":     "combat_log",
+			"attacker": monster.MonsterType.Name,
+			"defender": char.Name,
+			"damage":   hit2.Damage,
+			"is_crit":  hit2.IsCrit,
+		})
+	}
+
+	return logs
+}
+
 func topicToZone(topic string) string {
 	const prefix = "zone:"
 	if len(topic) > len(prefix) && topic[:len(prefix)] == prefix {

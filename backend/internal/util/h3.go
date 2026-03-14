@@ -5,12 +5,12 @@ import (
 
 	"hexslayer/internal/config"
 
-	h3light "github.com/ThingsIXFoundation/h3-light"
+	"github.com/ziprecruiter/h3-go/pkg/h3"
 )
 
 // ValidateZone checks that the string is a valid H3 cell at ZoneResolution.
 func ValidateZone(zone string) error {
-	cell, err := h3light.CellFromString(zone)
+	cell, err := h3.NewCellFromString(zone)
 	if err != nil {
 		return fmt.Errorf("invalid h3_zone: %s", zone)
 	}
