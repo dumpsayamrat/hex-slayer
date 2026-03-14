@@ -4,15 +4,27 @@ import (
 	"net/http"
 	"strconv"
 
+	"hexslayer/internal/db"
+	"hexslayer/internal/models"
 	"hexslayer/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
 
+type ZoneCharacterResponse struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	HP       int    `json:"hp"`
+	MaxHP    int    `json:"max_hp"`
+	PlayerID string `json:"player_id"`
+	H3Index  string `json:"h3_index"`
+}
+
 // ZoneResponse is the response for GET /api/map/zones.
 type ZoneResponse struct {
-	H3Zone   string                        `json:"h3_zone"`
-	Monsters []services.ZoneMonsterResponse `json:"monsters"`
+	H3Zone     string                        `json:"h3_zone"`
+	Monsters   []services.ZoneMonsterResponse `json:"monsters"`
+	Characters []ZoneCharacterResponse        `json:"characters"`
 }
 
 // GetZones godoc
@@ -55,8 +67,24 @@ func GetZones(c *gin.Context) {
 		return
 	}
 
+	// Load alive characters in this zone
+	var chars []models.Character
+	db.DB.Where("h3_zone = ? AND is_alive = true", zoneStr).Find(&chars)
+	charData := make([]ZoneCharacterResponse, len(chars))
+	for i, c := range chars {
+		charData[i] = ZoneCharacterResponse{
+			ID:       c.ID,
+			Name:     c.Name,
+			HP:       c.HP,
+			MaxHP:    c.MaxHP,
+			PlayerID: c.PlayerID,
+			H3Index:  c.H3Index,
+		}
+	}
+
 	c.JSON(http.StatusOK, ZoneResponse{
-		H3Zone:   zoneStr,
-		Monsters: monsters,
+		H3Zone:     zoneStr,
+		Monsters:   monsters,
+		Characters: charData,
 	})
 }
