@@ -5,23 +5,13 @@ import (
 	"math/rand"
 
 	"hexslayer/internal/config"
+	"hexslayer/internal/dto"
 	"hexslayer/internal/models"
 
 	"github.com/google/uuid"
 	h3 "github.com/uber/h3-go/v4"
 	"gorm.io/gorm"
 )
-
-// ZoneMonsterResponse is the lean monster data sent to the frontend.
-type ZoneMonsterResponse struct {
-	ID        string `json:"id"`
-	H3Index   string `json:"h3_index"`
-	Type      string `json:"type"`
-	Icon      string `json:"icon"`
-	CurrentHP int    `json:"current_hp"`
-	MaxHP     int    `json:"max_hp"`
-	IsAlive   bool   `json:"is_alive"`
-}
 
 type ZoneService struct {
 	db *gorm.DB
@@ -33,7 +23,7 @@ func NewZoneService(db *gorm.DB) *ZoneService {
 
 // GetOrCreateMonsters computes the res-6 zone from lat/lng,
 // ensures monsters are spawned up to cap, and returns all monsters in the zone.
-func (s *ZoneService) GetOrCreateMonsters(lat, lng float64) (string, []ZoneMonsterResponse, error) {
+func (s *ZoneService) GetOrCreateMonsters(lat, lng float64) (string, []dto.ZoneMonsterResponse, error) {
 	ll := h3.NewLatLng(lat, lng)
 	zone, err := h3.LatLngToCell(ll, config.ZoneResolution)
 	if err != nil {
@@ -70,9 +60,9 @@ func (s *ZoneService) GetOrCreateMonsters(lat, lng float64) (string, []ZoneMonst
 	log.Printf("zone %s: returning %d monsters", zoneStr, len(monsters))
 
 	// Map to lean response
-	result := make([]ZoneMonsterResponse, len(monsters))
+	result := make([]dto.ZoneMonsterResponse, len(monsters))
 	for i, m := range monsters {
-		result[i] = ZoneMonsterResponse{
+		result[i] = dto.ZoneMonsterResponse{
 			ID:        m.ID,
 			H3Index:   m.H3Index,
 			Type:      m.MonsterType.Name,

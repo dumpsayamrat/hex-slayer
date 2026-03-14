@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"hexslayer/internal/dto"
 	"hexslayer/internal/models"
-	"hexslayer/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,7 +22,7 @@ type ZoneCharacterResponse struct {
 // ZoneResponse is the response for GET /api/map/zones.
 type ZoneResponse struct {
 	H3Zone     string                 `json:"h3_zone"`
-	Monsters   []services.ZoneMonsterResponse  `json:"monsters"`
+	Monsters   []dto.ZoneMonsterResponse  `json:"monsters"`
 	Characters []ZoneCharacterResponse `json:"characters"`
 }
 
