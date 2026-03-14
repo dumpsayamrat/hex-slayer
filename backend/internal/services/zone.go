@@ -1,6 +1,7 @@
 package services
 
 import (
+	"log"
 	"math/rand"
 
 	"hexslayer/internal/config"
@@ -43,6 +44,9 @@ func GetOrCreateZoneMonsters(lat, lng float64) (string, []ZoneMonsterResponse, e
 	// Only spawn when alive count drops below 20% of cap, then fill back to cap
 	threshold := config.ZoneMonsterCap / 5
 	toSpawn := config.ZoneMonsterCap - int(aliveCount)
+
+	log.Printf("zone %s: aliveCount=%d threshold=%d toSpawn=%d", zoneStr, aliveCount, threshold, toSpawn)
+
 	if int(aliveCount) < threshold {
 		if err := spawnMonsters(zoneStr, zone, toSpawn); err != nil {
 			return "", nil, err
@@ -56,6 +60,8 @@ func GetOrCreateZoneMonsters(lat, lng float64) (string, []ZoneMonsterResponse, e
 		Find(&monsters).Error; err != nil {
 		return "", nil, err
 	}
+
+	log.Printf("zone %s: returning %d monsters", zoneStr, len(monsters))
 
 	// Map to lean response
 	result := make([]ZoneMonsterResponse, len(monsters))

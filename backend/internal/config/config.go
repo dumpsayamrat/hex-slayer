@@ -1,7 +1,7 @@
 package config
 
 const (
-	ZoneMonsterCap      = 5
+	ZoneMonsterCap      = 300
 	MaxCharactersAlive  = 2
 	TickIntervalSeconds = 2
 	KRingSearchMax      = 5
