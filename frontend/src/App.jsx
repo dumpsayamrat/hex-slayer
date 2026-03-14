@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import Map from './components/Map'
 import useGameSocket from './hooks/useGameSocket'
+import { initSession, getSession } from './game/session'
 
 function App() {
   const [healthStatus, setHealthStatus] = useState('checking...')
-  const { connected, lastMessage } = useGameSocket()
+  const [session, setSession] = useState(getSession())
+  const { connected, lastMessage, sendMessage } = useGameSocket(session?.sessionToken)
 
   useEffect(() => {
     fetch('/api/health')
@@ -12,6 +14,14 @@ function App() {
       .then(data => setHealthStatus(data.status === 'ok' ? 'connected' : 'error'))
       .catch(() => setHealthStatus('disconnected'))
   }, [])
+
+  useEffect(() => {
+    if (!session) {
+      initSession()
+        .then(setSession)
+        .catch(err => console.error('Failed to init session:', err))
+    }
+  }, [session])
 
   return (
     <div className="w-full h-full relative">
@@ -27,6 +37,11 @@ function App() {
           <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
           <span>WS: {connected ? 'connected' : 'disconnected'}</span>
         </div>
+        {session && (
+          <div className="text-xs text-gray-400 border-t border-gray-600 pt-1 mt-1">
+            {session.name}
+          </div>
+        )}
       </div>
 
       {/* Title */}

@@ -9,7 +9,6 @@ import (
 	"hexslayer/internal/handlers"
 	"hexslayer/internal/middleware"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -32,14 +31,6 @@ func main() {
 	engine.Start()
 
 	r := gin.Default()
-
-	// CORS — allow frontend dev server
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
-		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
-		AllowHeaders:     []string{"Content-Type", "Authorization"},
-		AllowCredentials: true,
-	}))
 
 	// Rate limiting middleware
 	r.Use(middleware.RateLimit())

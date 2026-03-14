@@ -2,15 +2,15 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
 
-export default function useGameSocket() {
+export default function useGameSocket(token) {
   const [connected, setConnected] = useState(false)
   const [lastMessage, setLastMessage] = useState(null)
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
 
   const connect = useCallback(() => {
-    // TODO: get real session token from localStorage after player init
-    const token = localStorage.getItem('sessionToken') || 'dev-token'
+    if (!token) return
+
     const ws = new WebSocket(`${WS_URL}?token=${token}`)
 
     ws.onopen = () => {
@@ -36,7 +36,7 @@ export default function useGameSocket() {
     }
 
     wsRef.current = ws
-  }, [])
+  }, [token])
 
   useEffect(() => {
     connect()
