@@ -4,7 +4,6 @@ const (
 	ZoneMonsterCap      = 5
 	MaxCharactersAlive  = 2
 	TickIntervalSeconds = 2
-	MonsterRespawnSecs  = 30
 	KRingSearchMax      = 5
 	BangkokLat          = 13.7563
 	BangkokLng          = 100.5018

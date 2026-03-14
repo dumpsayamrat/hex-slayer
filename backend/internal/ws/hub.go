@@ -15,44 +15,51 @@ var Hub = &hub{
 type hub struct {
 	mu     sync.RWMutex
 	topics map[string]map[*Conn]bool
+
+	// OnFirstSubscribe is called when a topic goes from 0→1 subscribers.
+	OnFirstSubscribe func(topic string)
 }
 
 // Subscribe adds a conn to a topic.
 func (h *hub) Subscribe(topic string, c *Conn) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-
+	wasEmpty := len(h.topics[topic]) == 0
 	if h.topics[topic] == nil {
 		h.topics[topic] = make(map[*Conn]bool)
 	}
 	h.topics[topic][c] = true
-	log.Printf("ws hub: conn subscribed to %s (%d subscribers)", topic, len(h.topics[topic]))
+	count := len(h.topics[topic])
+	h.mu.Unlock()
+
+	log.Printf("ws hub: conn subscribed to %s (%d subscribers)", topic, count)
+
+	if wasEmpty && h.OnFirstSubscribe != nil {
+		h.OnFirstSubscribe(topic)
+	}
 }
 
 // Unsubscribe removes a conn from a topic.
 func (h *hub) Unsubscribe(topic string, c *Conn) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	if conns, ok := h.topics[topic]; ok {
 		delete(conns, c)
 		if len(conns) == 0 {
 			delete(h.topics, topic)
 		}
 	}
+	h.mu.Unlock()
 }
 
 // UnsubscribeAll removes a conn from every topic. Call this on disconnect.
 func (h *hub) UnsubscribeAll(c *Conn) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	for topic, conns := range h.topics {
 		delete(conns, c)
 		if len(conns) == 0 {
 			delete(h.topics, topic)
 		}
 	}
+	h.mu.Unlock()
 }
 
 // Broadcast sends a JSON payload to all conns subscribed to a topic.

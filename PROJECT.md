@@ -260,16 +260,15 @@ Both character and monster attack each other every tick (2 seconds).
 7. Return all monsters in the zone
 8. FE shows a loading indicator during this call (monster creation may take time on first load)
 
-**Respawn (async, via game engine tick):**
-- Dead monsters respawn after 30 seconds (set `respawn_at`, engine checks each tick)
-- Engine counts living monsters per zone each tick; if below cap, spawns new ones
+**No respawn:**
+- Dead monsters stay dead. New monsters only appear on zone load (when a player calls `GET /api/map/zones`).
 
 ### 6.4 Zone Monster Cap
 
 | Config | Value |
 |--------|-------|
 | ZoneMonsterCap | 300 |
-| MonsterRespawnDelay | 30 seconds |
+| MonsterRespawnDelay | N/A — no respawn |
 | TickInterval | 2 seconds |
 
 ---
@@ -286,7 +285,6 @@ Both character and monster attack each other every tick (2 seconds).
 Engine.Start()
 └── for each zone → go runZoneLoop(zoneH3)
     └── every 2s → tickZone(zoneH3)
-        ├── check monster respawns
         ├── build engaged map (in-memory, this tick only)
         ├── for each living character in zone
         │   ├── check character_engagements for existing target
@@ -487,7 +485,7 @@ const (
     ZoneMonsterCap      = 300
     MaxCharactersAlive  = 2
     TickIntervalSeconds = 2
-    MonsterRespawnSecs  = 30
+    // MonsterRespawnSecs removed — no respawn
     KRingSearchMax      = 5
     BangkokLat          = 13.7563
     BangkokLng          = 100.5018
