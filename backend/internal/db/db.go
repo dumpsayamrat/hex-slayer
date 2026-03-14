@@ -58,7 +58,7 @@ func seed() {
 		{Name: "Goblin", BaseDamage: 25, DamageAmp: 1.1, DamageReduction: 0.08, CritChance: 0.10, CritMultiplier: 1.5, MaxHP: 120, Icon: "goblin.png"},
 		{Name: "Orc", BaseDamage: 35, DamageAmp: 1.2, DamageReduction: 0.15, CritChance: 0.12, CritMultiplier: 1.6, MaxHP: 200, Icon: "orc.png"},
 		{Name: "Troll", BaseDamage: 45, DamageAmp: 1.3, DamageReduction: 0.20, CritChance: 0.15, CritMultiplier: 1.8, MaxHP: 300, Icon: "troll.png"},
-		{Name: "Dragon", BaseDamage: 60, DamageAmp: 1.5, DamageReduction: 0.25, CritChance: 0.20, CritMultiplier: 2.0, MaxHP: 500, Icon: "dragon.png"},
+		{Name: "Dragon", BaseDamage: 35, DamageAmp: 1.3, DamageReduction: 0.25, CritChance: 0.15, CritMultiplier: 1.8, MaxHP: 500, Icon: "dragon.png"},
 	}
 
 	if err := DB.Create(&monsterTypes).Error; err != nil {

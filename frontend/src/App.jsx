@@ -70,7 +70,7 @@ function App() {
         dispatch({ type: 'ZONE_SNAPSHOT', characters: msg.characters, monsters: msg.monsters })
         break
       case 'combat_log':
-        dispatch({ type: 'COMBAT_LOG', attacker: msg.attacker, defender: msg.defender, damage: msg.damage, is_crit: msg.is_crit })
+        dispatch({ type: 'COMBAT_LOG', ...msg })
         break
       case 'combat_engage':
         dispatch({ type: 'COMBAT_ENGAGE', character_id: msg.character_id, monster_id: msg.monster_id })

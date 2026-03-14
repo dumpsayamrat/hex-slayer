@@ -18,6 +18,8 @@ type Character struct {
 	CritMultiplier  float64    `gorm:"not null" json:"crit_multiplier"`
 	Kills           int        `gorm:"not null;default:0" json:"kills"`
 	IsAlive         bool       `gorm:"not null;default:true" json:"is_alive"`
+	WanderBearing   float64    `gorm:"not null;default:0" json:"wander_bearing"`
+	TargetMonsterID *string    `gorm:"index" json:"target_monster_id"`
 	DeployedAt      time.Time  `json:"deployed_at"`
 	DiedAt          *time.Time `json:"died_at"`
 }
