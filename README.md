@@ -33,11 +33,14 @@ backend/
 ├── internal/
 │   ├── config/                  # Game constants (tick rate, radii, caps)
 │   ├── db/                      # SQLite init, migrations, seeding
+│   ├── apperr/                   # Domain error types (Validation, NotFound)
 │   ├── game/
 │   │   ├── engine.go            # Tick loop, zone goroutine management
+│   │   ├── tick.go              # Per-character state machine (combat, hunting, scanning, wandering)
 │   │   ├── combat.go            # Damage calculation, attack rolls
 │   │   ├── search.go            # Ring-by-ring monster detection, pathfinding
 │   │   └── wander.go            # Bearing-based movement with drift
+│   ├── dto/                      # Shared response types
 │   ├── handlers/                # HTTP + WebSocket handlers
 │   ├── middleware/               # Auth (Bearer token), rate limiting
 │   ├── models/                  # GORM models (Player, Character, MapMonster, etc.)
