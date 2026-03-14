@@ -2,6 +2,8 @@
 
 A real-time idle geo-based monster hunting game built with Go and React. Characters autonomously wander an H3 hex-grid world, detect nearby monsters, pursue them, and engage in turn-based combat — all streamed live to the browser over WebSocket.
 
+### [Live Demo](https://hexslayer.dumpsayamrat.com)
+
 ## What It Does
 
 - **Hex-grid world** — The map is divided into zones using Uber's [H3 spatial index](https://h3geo.org/) (resolution 6 for zones, resolution 12 for entity placement). Monsters spawn across inner and outer rings of each zone with weighted distribution.
@@ -84,6 +86,30 @@ npm run dev
 ```
 
 The dev server starts on `http://localhost:5173` and proxies API requests to the backend.
+
+## Deployment
+
+### Build locally
+
+```bash
+make build
+```
+
+### First-time server setup
+
+```bash
+make setup HOST=<ip>
+```
+
+Installs nginx, creates the systemd service, and configures the reverse proxy.
+
+### Deploy
+
+```bash
+make deploy HOST=<ip>
+```
+
+Uploads the Go binary + frontend build, restarts the service.
 
 ## API
 

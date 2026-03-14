@@ -1,0 +1,16 @@
+[Unit]
+Description=HexSlayer Game Server
+After=network.target
+
+[Service]
+Type=simple
+User=hexslayer
+Group=hexslayer
+WorkingDirectory=/var/lib/hexslayer
+ExecStart=/opt/hexslayer/server
+Restart=on-failure
+RestartSec=5
+Environment=GIN_MODE=release
+
+[Install]
+WantedBy=multi-user.target
