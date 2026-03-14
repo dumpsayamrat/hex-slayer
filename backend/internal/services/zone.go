@@ -77,13 +77,19 @@ func (s *ZoneService) GetOrCreateMonsters(lat, lng float64) (string, []dto.ZoneM
 	return zoneStr, result, nil
 }
 
-// randomChildCell picks a random res-12 cell within a zone.
+// randomChildCell picks a random res-12 cell within a zone, biased toward the center.
+// 70% chance to pick from the inner half, 30% from the outer half.
 func randomChildCell(zone h3.Cell) string {
-	children, err := h3.UncompactCells([]h3.Cell{zone}, config.EntityResolution)
-	if err != nil || len(children) == 0 {
+	inner, outer := getAvailableCells(zone)
+	if len(inner) == 0 && len(outer) == 0 {
 		return zone.String()
 	}
-	return children[rand.Intn(len(children))].String()
+
+	useInner := len(inner) > 0 && (len(outer) == 0 || rand.Float64() < 0.7)
+	if useInner {
+		return inner[rand.Intn(len(inner))].String()
+	}
+	return outer[rand.Intn(len(outer))].String()
 }
 
 // getAvailableCells returns all res-12 children of a zone, split into

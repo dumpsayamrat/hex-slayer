@@ -6,7 +6,7 @@ import ZoneHex from './ZoneHex'
 import 'leaflet/dist/leaflet.css'
 
 const BANGKOK_CENTER = [13.7563, 100.5018]
-const MONSTER_SIZE = 28
+const MONSTER_SIZE = 20
 const CHAR_SIZE = 40
 const MOVE_DURATION_MS = 1500
 
