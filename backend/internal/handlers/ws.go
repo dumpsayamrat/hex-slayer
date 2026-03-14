@@ -6,6 +6,7 @@ import (
 
 	"hexslayer/internal/db"
 	"hexslayer/internal/models"
+	"hexslayer/internal/ws"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -32,25 +33,28 @@ func WebSocketHandler(c *gin.Context) {
 		return
 	}
 
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	rawConn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("websocket upgrade failed: %v", err)
 		return
 	}
-	defer conn.Close()
 
-	log.Printf("websocket connected: token=%s", token)
+	conn := ws.NewConn(rawConn)
+	defer func() {
+		ws.Hub.UnsubscribeAll(conn)
+		conn.Close()
+	}()
 
-	// Send initial connection confirmation
-	conn.WriteJSON(gin.H{
+	log.Printf("websocket connected: player=%s", player.ID)
+
+	conn.SendJSON(gin.H{
 		"type":    "connected",
 		"message": "welcome to hexslayer",
 	})
 
-	// Read loop — stub for handling client messages
 	for {
 		var msg map[string]interface{}
-		err := conn.ReadJSON(&msg)
+		err := conn.Raw.ReadJSON(&msg)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
 				log.Printf("websocket error: %v", err)
@@ -59,14 +63,32 @@ func WebSocketHandler(c *gin.Context) {
 		}
 
 		msgType, _ := msg["type"].(string)
-		log.Printf("received ws message: type=%s", msgType)
+		log.Printf("ws message: player=%s type=%s", player.ID, msgType)
 
-		// TODO: handle subscribe_zone, deploy_character, ping
 		switch msgType {
 		case "ping":
-			conn.WriteJSON(gin.H{"type": "pong"})
+			conn.SendJSON(gin.H{"type": "pong"})
+
+		case "subscribe_zone":
+			zone, _ := msg["h3_zone"].(string)
+			if zone == "" {
+				conn.SendJSON(gin.H{"type": "error", "message": "h3_zone required"})
+				continue
+			}
+			ws.Hub.Subscribe("zone:"+zone, conn)
+			conn.SendJSON(gin.H{"type": "subscribed", "h3_zone": zone})
+
+		case "unsubscribe_zone":
+			zone, _ := msg["h3_zone"].(string)
+			if zone == "" {
+				conn.SendJSON(gin.H{"type": "error", "message": "h3_zone required"})
+				continue
+			}
+			ws.Hub.Unsubscribe("zone:"+zone, conn)
+			conn.SendJSON(gin.H{"type": "unsubscribed", "h3_zone": zone})
+
 		default:
-			conn.WriteJSON(gin.H{"type": "error", "message": "unknown message type"})
+			conn.SendJSON(gin.H{"type": "error", "message": "unknown message type"})
 		}
 	}
 }
