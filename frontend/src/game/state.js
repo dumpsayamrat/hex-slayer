@@ -1,9 +1,12 @@
 // Game state reducer — central store for monsters, characters, combat logs
 
+let popupIdCounter = 0
+
 export const initialState = {
   monsters: [],    // from zone API + WS updates
   characters: [],  // from zone API + WS updates
   combatLogs: [],  // from WS combat_log events (last 50)
+  damagePopups: [], // { id, characterId, monsterId, damage, target: 'char'|'monster', isCrit }
 }
 
 const MAX_LOGS = 50
@@ -68,7 +71,18 @@ export function gameReducer(state, action) {
       const monsters = action.monster_id
         ? state.monsters.map(m => m.id === action.monster_id ? { ...m, current_hp: action.monster_hp } : m)
         : state.monsters
-      return { ...state, combatLogs, characters, monsters }
+      // Determine who was hit: if attacker_id === character_id, monster was hit; otherwise char was hit
+      const target = action.attacker_id === action.character_id ? 'monster' : 'char'
+      const popup = {
+        id: ++popupIdCounter,
+        characterId: action.character_id,
+        monsterId: action.monster_id,
+        damage: action.damage,
+        isCrit: action.is_crit,
+        target,
+      }
+      const damagePopups = [...state.damagePopups, popup].slice(-20)
+      return { ...state, combatLogs, characters, monsters, damagePopups }
     }
 
     // WS: combat_engage
@@ -112,6 +126,12 @@ export function gameReducer(state, action) {
     // Add newly deployed character
     case 'CHAR_DEPLOYED': {
       return { ...state, characters: [...state.characters, action.character] }
+    }
+
+    // Remove a popup after animation ends
+    case 'CLEAR_POPUP': {
+      const damagePopups = state.damagePopups.filter(p => p.id !== action.id)
+      return { ...state, damagePopups }
     }
 
     default:

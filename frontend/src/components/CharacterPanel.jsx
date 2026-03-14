@@ -1,4 +1,32 @@
-function CharacterPanel({ characters = [], monsters = [], onDeploy }) {
+import { useEffect, useRef } from 'react'
+
+// Damage popup with RO-style scale up + fade out animation
+function DamagePopup({ damage, isCrit, target, onDone }) {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const timer = setTimeout(onDone, 800)
+    return () => clearTimeout(timer)
+  }, [onDone])
+
+  // yellow for char taking damage, red for monster taking damage
+  const color = target === 'char' ? '#facc15' : '#ef4444'
+  const text = isCrit ? `-${damage} CRIT!` : `-${damage}`
+
+  return (
+    <span
+      ref={ref}
+      className="damage-popup"
+      style={{ color, fontWeight: 'bold' }}
+    >
+      {text}
+    </span>
+  )
+}
+
+function CharacterPanel({ characters = [], monsters = [], damagePopups = [], dispatch, onDeploy }) {
   const monsterById = {}
   for (const m of monsters) {
     monsterById[m.id] = m
@@ -27,6 +55,12 @@ function CharacterPanel({ characters = [], monsters = [], onDeploy }) {
         const hpPct = char.max_hp > 0 ? (char.hp / char.max_hp) * 100 : 0
         const hpColor = dead ? 'bg-gray-500' : hpPct > 50 ? 'bg-green-500' : hpPct > 25 ? 'bg-yellow-500' : 'bg-red-500'
         const fightingMonster = char.fighting_monster_id ? monsterById[char.fighting_monster_id] : null
+        const monHpPct = fightingMonster && fightingMonster.max_hp > 0
+          ? (fightingMonster.current_hp / fightingMonster.max_hp) * 100 : 0
+
+        // Popups for this character
+        const charPopups = damagePopups.filter(p => p.characterId === char.id && p.target === 'char')
+        const monPopups = damagePopups.filter(p => p.characterId === char.id && p.target === 'monster')
 
         return (
           <div key={slot} className={`border rounded p-2 mb-2 ${dead ? 'border-red-800 opacity-60' : 'border-gray-600'}`}>
@@ -36,26 +70,56 @@ function CharacterPanel({ characters = [], monsters = [], onDeploy }) {
             </div>
 
             {/* Character HP */}
-            <div className="w-full bg-gray-700 rounded h-2 mt-1">
-              <div className={`${hpColor} h-2 rounded transition-all`} style={{ width: `${hpPct}%` }} />
+            <div className="relative">
+              <div className="w-full bg-gray-700 rounded h-2 mt-1">
+                <div className={`${hpColor} h-2 rounded transition-all`} style={{ width: `${hpPct}%` }} />
+              </div>
+              <div className="flex justify-between items-center">
+                <p className="text-xs text-gray-400 mt-0.5">
+                  HP: {char.hp}/{char.max_hp}
+                </p>
+                <div className="damage-popup-container">
+                  {charPopups.map(p => (
+                    <DamagePopup
+                      key={p.id}
+                      damage={p.damage}
+                      isCrit={p.isCrit}
+                      target={p.target}
+                      onDone={() => dispatch({ type: 'CLEAR_POPUP', id: p.id })}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">
-              HP: {char.hp}/{char.max_hp}
-            </p>
 
             {/* Fighting status */}
             {fightingMonster && !dead && (
               <div className="mt-1 border-t border-gray-700 pt-1">
                 <p className="text-xs text-orange-400">Fighting: {fightingMonster.type}</p>
-                <div className="w-full bg-gray-700 rounded h-1.5 mt-0.5">
-                  <div
-                    className="bg-red-500 h-1.5 rounded transition-all"
-                    style={{ width: `${fightingMonster.max_hp > 0 ? (fightingMonster.current_hp / fightingMonster.max_hp) * 100 : 0}%` }}
-                  />
+                <div className="relative">
+                  <div className="w-full bg-gray-700 rounded h-1.5 mt-0.5">
+                    <div
+                      className="bg-red-500 h-1.5 rounded transition-all"
+                      style={{ width: `${monHpPct}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs text-gray-500">
+                      {fightingMonster.current_hp}/{fightingMonster.max_hp}
+                    </p>
+                    <div className="damage-popup-container">
+                      {monPopups.map(p => (
+                        <DamagePopup
+                          key={p.id}
+                          damage={p.damage}
+                          isCrit={p.isCrit}
+                          target={p.target}
+                          onDone={() => dispatch({ type: 'CLEAR_POPUP', id: p.id })}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500">
-                  {fightingMonster.current_hp}/{fightingMonster.max_hp}
-                </p>
               </div>
             )}
 

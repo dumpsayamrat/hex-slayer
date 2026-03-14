@@ -9,3 +9,41 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
 }
+
+/* RO-style damage popup: scale up from small + fade out */
+.damage-popup-container {
+  position: relative;
+  display: inline-block;
+  height: 16px;
+  min-width: 30px;
+}
+
+.damage-popup {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-size: 14px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  animation: dmg-pop 0.8s ease-out forwards;
+  white-space: nowrap;
+}
+
+@keyframes dmg-pop {
+  0% {
+    opacity: 1;
+    transform: scale(0.4) translateY(0);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.3) translateY(-4px);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.0) translateY(-8px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8) translateY(-16px);
+  }
+}

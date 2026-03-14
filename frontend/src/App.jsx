@@ -165,6 +165,8 @@ function App() {
       <CharacterPanel
         characters={myChars}
         monsters={game.monsters}
+        damagePopups={game.damagePopups}
+        dispatch={dispatch}
         onDeploy={handleDeploy}
       />
 
