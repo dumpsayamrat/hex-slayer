@@ -61,7 +61,7 @@ func DeployCharacter(playerID, h3Zone string) (*models.Character, error) {
 	}
 	cellStr := randomChildCell(h3Zone, zone)
 
-	maxHP := randRangeInt(250, 350)
+	maxHP := randRangeInt(500, 700)
 	char := models.Character{
 		ID:              uuid.New().String(),
 		PlayerID:        playerID,
@@ -70,7 +70,7 @@ func DeployCharacter(playerID, h3Zone string) (*models.Character, error) {
 		H3Index:         cellStr,
 		BaseDamage:      randRangeInt(30, 60),
 		DamageAmp:       randRange(1.0, 1.3),
-		DamageReduction: randRange(0.15, 0.45),
+		DamageReduction: randRange(0.35, 0.55),
 		CritChance:      randRange(0.10, 0.25),
 		CritMultiplier:  randRange(1.5, 2.0),
 		HP:              maxHP,

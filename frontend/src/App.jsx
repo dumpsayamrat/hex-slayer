@@ -14,7 +14,37 @@ function App() {
   const [zoneId, setZoneId] = useState(null)
   const [picking, setPicking] = useState(false)
   const [game, dispatch] = useReducer(gameReducer, initialState)
-  const { connected, lastMessage, sendMessage } = useGameSocket(session?.sessionToken)
+  // Handle WS messages — dispatch directly to avoid dropped events
+  const handleWsMessage = useCallback((msg) => {
+    switch (msg.type) {
+      case 'zone_snapshot':
+        console.log(`%c[WS] zone_snapshot %c${msg.characters?.length || 0} chars, ${msg.monsters?.length || 0} monsters`, 'color:#4ade80;font-weight:bold', 'color:#9ca3af')
+        dispatch({ type: 'ZONE_SNAPSHOT', characters: msg.characters, monsters: msg.monsters })
+        break
+      case 'combat_log':
+        console.log(`%c[WS] combat_log %c${msg.attacker} → ${msg.defender} %c${msg.damage} dmg${msg.is_crit ? ' CRIT!' : ''} %c(char HP: ${msg.character_hp}, mon HP: ${msg.monster_hp})`, 'color:#f59e0b;font-weight:bold', 'color:#fbbf24', msg.is_crit ? 'color:#ef4444;font-weight:bold' : 'color:#fb923c', 'color:#9ca3af')
+        dispatch({ ...msg, type: 'COMBAT_LOG' })
+        break
+      case 'combat_engage':
+        console.log(`%c[WS] combat_engage %cchar:${msg.character_id.slice(0,8)} → mon:${msg.monster_id.slice(0,8)}`, 'color:#a78bfa;font-weight:bold', 'color:#c4b5fd')
+        dispatch({ type: 'COMBAT_ENGAGE', character_id: msg.character_id, monster_id: msg.monster_id })
+        break
+      case 'char_move':
+        console.log(`%c[WS] char_move %c${msg.character_id.slice(0,8)} → ${msg.h3_index}`, 'color:#60a5fa;font-weight:bold', 'color:#93c5fd')
+        dispatch({ type: 'CHAR_MOVE', character_id: msg.character_id, h3_index: msg.h3_index })
+        break
+      case 'monster_died':
+        console.log(`%c[WS] monster_died %c${msg.monster_id.slice(0,8)} killed by ${msg.killed_by}`, 'color:#ef4444;font-weight:bold', 'color:#fca5a5')
+        dispatch({ type: 'MONSTER_DIED', monster_id: msg.monster_id, killed_by: msg.killed_by })
+        break
+      case 'character_died':
+        console.log(`%c[WS] character_died %c${msg.character_id.slice(0,8)} killed by ${msg.killed_by}`, 'color:#dc2626;font-weight:bold', 'color:#fca5a5')
+        dispatch({ type: 'CHARACTER_DIED', character_id: msg.character_id, killed_by: msg.killed_by })
+        break
+    }
+  }, [])
+
+  const { connected, sendMessage } = useGameSocket(session?.sessionToken, handleWsMessage)
 
   // Health check
   useEffect(() => {
@@ -57,33 +87,6 @@ function App() {
     if (!zoneId || !connected) return
     sendMessage({ type: 'subscribe_zone', h3_zone: zoneId })
   }, [zoneId, connected, sendMessage])
-
-  // Handle all WS messages
-  useEffect(() => {
-    if (!lastMessage) return
-    const msg = lastMessage
-
-    switch (msg.type) {
-      case 'zone_snapshot':
-        dispatch({ type: 'ZONE_SNAPSHOT', characters: msg.characters, monsters: msg.monsters })
-        break
-      case 'combat_log':
-        dispatch({ ...msg, type: 'COMBAT_LOG' })
-        break
-      case 'combat_engage':
-        dispatch({ type: 'COMBAT_ENGAGE', character_id: msg.character_id, monster_id: msg.monster_id })
-        break
-      case 'char_move':
-        dispatch({ type: 'CHAR_MOVE', character_id: msg.character_id, h3_index: msg.h3_index })
-        break
-      case 'monster_died':
-        dispatch({ type: 'MONSTER_DIED', monster_id: msg.monster_id, killed_by: msg.killed_by })
-        break
-      case 'character_died':
-        dispatch({ type: 'CHARACTER_DIED', character_id: msg.character_id, killed_by: msg.killed_by })
-        break
-    }
-  }, [lastMessage])
 
   // Deploy character
   const handleDeploy = useCallback(() => {

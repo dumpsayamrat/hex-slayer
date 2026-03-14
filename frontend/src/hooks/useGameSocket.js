@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
 
-export default function useGameSocket(token) {
+export default function useGameSocket(token, onMessage) {
   const [connected, setConnected] = useState(false)
-  const [lastMessage, setLastMessage] = useState(null)
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
+  const onMessageRef = useRef(onMessage)
+  onMessageRef.current = onMessage
 
   const connect = useCallback(() => {
     if (!token) return
@@ -20,8 +21,7 @@ export default function useGameSocket(token) {
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
-      console.log('[WS] message:', data)
-      setLastMessage(data)
+      onMessageRef.current?.(data)
     }
 
     ws.onclose = () => {
@@ -52,5 +52,5 @@ export default function useGameSocket(token) {
     }
   }, [])
 
-  return { connected, lastMessage, sendMessage }
+  return { connected, sendMessage }
 }
