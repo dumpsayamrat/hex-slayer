@@ -12,7 +12,7 @@ function ZoneHex({ boundary, label, color = 'gray', onClick }) {
         weight: 2,
         fillOpacity: 0.3,
       }}
-      eventHandlers={{ click: onClick }}
+      eventHandlers={onClick ? { click: onClick } : {}}
     >
       {label && <Tooltip>{label}</Tooltip>}
     </Polygon>

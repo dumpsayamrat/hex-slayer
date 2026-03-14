@@ -22,7 +22,15 @@ export function clearSession() {
 
 export async function initSession() {
   const existing = getSession()
-  if (existing?.sessionToken) return existing
+  if (existing?.sessionToken) {
+    // Validate the token is still valid against an auth-protected endpoint
+    const check = await fetch('/api/map/zones?lat=0&lng=0', {
+      headers: { Authorization: `Bearer ${existing.sessionToken}` },
+    }).catch(() => null)
+    if (check && check.status !== 401) return existing
+    // Token invalid — clear and re-init
+    clearSession()
+  }
 
   const res = await fetch('/api/player/init', { method: 'POST' })
   if (!res.ok) throw new Error('Failed to init player')

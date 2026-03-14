@@ -58,11 +58,17 @@ export function gameReducer(state, action) {
       return { ...state, characters, monsters }
     }
 
-    // WS: combat_log
+    // WS: combat_log — update HP for both character and monster
     case 'COMBAT_LOG': {
       const log = { attacker: action.attacker, defender: action.defender, damage: action.damage, is_crit: action.is_crit }
       const combatLogs = [log, ...state.combatLogs].slice(0, MAX_LOGS)
-      return { ...state, combatLogs }
+      const characters = action.character_id
+        ? state.characters.map(c => c.id === action.character_id ? { ...c, hp: action.character_hp } : c)
+        : state.characters
+      const monsters = action.monster_id
+        ? state.monsters.map(m => m.id === action.monster_id ? { ...m, current_hp: action.monster_hp } : m)
+        : state.monsters
+      return { ...state, combatLogs, characters, monsters }
     }
 
     // WS: combat_engage

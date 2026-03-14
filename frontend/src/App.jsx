@@ -3,14 +3,14 @@ import Map from './components/Map'
 import CharacterPanel from './components/CharacterPanel'
 import CombatLog from './components/CombatLog'
 import useGameSocket from './hooks/useGameSocket'
-import { initSession, getSession } from './game/session'
+import { initSession } from './game/session'
 import { gameReducer, initialState } from './game/state'
 
 const BANGKOK = { lat: 13.7563, lng: 100.5018 }
 
 function App() {
   const [healthStatus, setHealthStatus] = useState('checking...')
-  const [session, setSession] = useState(getSession())
+  const [session, setSession] = useState(null)
   const [zoneId, setZoneId] = useState(null)
   const [picking, setPicking] = useState(false)
   const [game, dispatch] = useReducer(gameReducer, initialState)
@@ -24,14 +24,12 @@ function App() {
       .catch(() => setHealthStatus('disconnected'))
   }, [])
 
-  // Init session
+  // Init session (always validate — handles DB reset)
   useEffect(() => {
-    if (!session) {
-      initSession()
-        .then(setSession)
-        .catch(err => console.error('Failed to init session:', err))
-    }
-  }, [session])
+    initSession()
+      .then(setSession)
+      .catch(err => console.error('Failed to init session:', err))
+  }, [])
 
   // Load zone from API
   const loadZone = useCallback((lat, lng) => {
@@ -70,7 +68,7 @@ function App() {
         dispatch({ type: 'ZONE_SNAPSHOT', characters: msg.characters, monsters: msg.monsters })
         break
       case 'combat_log':
-        dispatch({ type: 'COMBAT_LOG', ...msg })
+        dispatch({ ...msg, type: 'COMBAT_LOG' })
         break
       case 'combat_engage':
         dispatch({ type: 'COMBAT_ENGAGE', character_id: msg.character_id, monster_id: msg.monster_id })
