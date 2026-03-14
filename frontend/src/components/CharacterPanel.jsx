@@ -72,7 +72,7 @@ function CharacterPanel({ characters = [], monsters = [], damagePopups = [], dis
             {/* Character HP */}
             <div className="relative">
               <div className="w-full bg-gray-700 rounded h-2 mt-1">
-                <div className={`${hpColor} h-2 rounded transition-all`} style={{ width: `${hpPct}%` }} />
+                <div className={`${hpColor} h-2 rounded hp-bar`} style={{ width: `${hpPct}%` }} />
               </div>
               <div className="flex justify-between items-center">
                 <p className="text-xs text-gray-400 mt-0.5">
@@ -99,7 +99,7 @@ function CharacterPanel({ characters = [], monsters = [], damagePopups = [], dis
                 <div className="relative">
                   <div className="w-full bg-gray-700 rounded h-1.5 mt-0.5">
                     <div
-                      className="bg-red-500 h-1.5 rounded transition-all"
+                      className="bg-red-500 h-1.5 rounded hp-bar"
                       style={{ width: `${monHpPct}%` }}
                     />
                   </div>

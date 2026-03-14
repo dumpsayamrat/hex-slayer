@@ -10,6 +10,11 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* Smooth HP bar drain */
+.hp-bar {
+  transition: width 0.6s ease-in-out;
+}
+
 /* RO-style damage popup: scale up from small + fade out */
 .damage-popup-container {
   position: relative;
