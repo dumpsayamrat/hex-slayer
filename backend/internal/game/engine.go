@@ -9,7 +9,6 @@ import (
 	"hexslayer/internal/models"
 	"hexslayer/internal/ws"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -95,7 +94,6 @@ func (e *Engine) tickZone(zone string) bool {
 	// Load alive characters in zone
 	var characters []models.Character
 	e.db.Where("h3_zone = ? AND is_alive = true", zone).Find(&characters)
-
 	if len(characters) == 0 {
 		return false
 	}
@@ -104,7 +102,7 @@ func (e *Engine) tickZone(zone string) bool {
 	var monsters []models.MapMonster
 	e.db.Preload("MonsterType").Where("h3_zone = ? AND is_alive = true", zone).Find(&monsters)
 
-	// Build monster lookup by ID
+	// Build monster lookups
 	monsterByID := make(map[string]*models.MapMonster, len(monsters))
 	monsterPtrs := make([]*models.MapMonster, len(monsters))
 	for i := range monsters {
@@ -112,7 +110,7 @@ func (e *Engine) tickZone(zone string) bool {
 		monsterPtrs[i] = &monsters[i]
 	}
 
-	// Load existing engagements for characters in this zone
+	// Load existing engagements
 	charIDs := make([]string, len(characters))
 	for i, c := range characters {
 		charIDs[i] = c.ID
@@ -125,234 +123,30 @@ func (e *Engine) tickZone(zone string) bool {
 		engagementByChar[engagements[i].CharacterID] = &engagements[i]
 	}
 
-	// Track which monsters are engaged this tick (prevents double-targeting)
+	// Shared state for this tick
 	engaged := make(map[string]bool)
 
-	// Collect events to broadcast
-	var events []map[string]interface{}
-
+	// Process each character
+	var allEvents []map[string]interface{}
 	for i := range characters {
-		char := &characters[i]
-		if !char.IsAlive {
-			continue
+		ct := &charTick{
+			db:               e.db,
+			char:             &characters[i],
+			monsterByID:      monsterByID,
+			monsterPtrs:      monsterPtrs,
+			engaged:          engaged,
+			engagementByChar: engagementByChar,
 		}
-
-		eng := engagementByChar[char.ID]
-
-		// === STATE: COMBAT (has active engagement) ===
-		if eng != nil {
-			monster := monsterByID[eng.MonsterID]
-			if monster != nil && monster.IsAlive {
-				engaged[monster.ID] = true
-				logs := doCombat(e.db, char, monster)
-				events = append(events, logs...)
-
-				if !monster.IsAlive {
-					char.Kills++
-					e.db.Model(char).Update("kills", char.Kills)
-					events = append(events, map[string]interface{}{
-						"type":       "monster_died",
-						"monster_id": monster.ID,
-						"killed_by":  char.Name,
-					})
-					e.db.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
-					delete(engagementByChar, char.ID)
-					char.TargetMonsterID = nil
-					// Walk away after kill before next fight
-					events = append(events, e.wanderAndEmit(char)...)
-				}
-				if !char.IsAlive {
-					events = append(events, map[string]interface{}{
-						"type":         "character_died",
-						"character_id": char.ID,
-						"killed_by":    monster.MonsterType.Name,
-					})
-					e.db.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
-					delete(engagementByChar, char.ID)
-				}
-				continue
-			}
-
-			// Monster dead or gone — walk away
-			e.db.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
-			delete(engagementByChar, char.ID)
-			char.TargetMonsterID = nil
-			events = append(events, e.wanderAndEmit(char)...)
-		}
-
-		// === STATE: HUNTING (has target, walking toward it) ===
-		if char.TargetMonsterID != nil {
-			target := monsterByID[*char.TargetMonsterID]
-			if target == nil || !target.IsAlive || engaged[target.ID] {
-				// Target gone — clear and fall through to scan/wander
-				char.TargetMonsterID = nil
-				e.db.Model(char).Update("target_monster_id", nil)
-			} else {
-				// Move one step toward target
-				newIndex, dist := moveToward(char, target)
-				if newIndex != char.H3Index {
-					char.H3Index = newIndex
-					e.db.Model(char).Updates(map[string]interface{}{
-						"h3_index":       newIndex,
-						"wander_bearing": char.WanderBearing,
-					})
-					events = append(events, map[string]interface{}{
-						"type":         "char_move",
-						"character_id": char.ID,
-						"h3_index":     newIndex,
-					})
-				}
-
-				// Close enough to engage (within 2 cells)
-				if dist <= config.GridDiskRadius {
-					engaged[target.ID] = true
-					newEng := models.CharacterEngagement{
-						ID:          uuid.New().String(),
-						CharacterID: char.ID,
-						MonsterID:   target.ID,
-						EngagedAt:   time.Now(),
-					}
-					e.db.Create(&newEng)
-					engagementByChar[char.ID] = &newEng
-
-					events = append(events, map[string]interface{}{
-						"type":         "combat_engage",
-						"character_id": char.ID,
-						"monster_id":   target.ID,
-					})
-
-					logs := doCombat(e.db, char, target)
-					events = append(events, logs...)
-
-					if !target.IsAlive {
-						char.Kills++
-						e.db.Model(char).Update("kills", char.Kills)
-						events = append(events, map[string]interface{}{
-							"type":       "monster_died",
-							"monster_id": target.ID,
-							"killed_by":  char.Name,
-						})
-						e.db.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
-						delete(engagementByChar, char.ID)
-						char.TargetMonsterID = nil
-						// Walk away after kill before next fight
-						events = append(events, e.wanderAndEmit(char)...)
-					}
-					if !char.IsAlive {
-						events = append(events, map[string]interface{}{
-							"type":         "character_died",
-							"character_id": char.ID,
-							"killed_by":    target.MonsterType.Name,
-						})
-						e.db.Delete(&models.CharacterEngagement{}, "character_id = ?", char.ID)
-						delete(engagementByChar, char.ID)
-					}
-				}
-				continue
-			}
-		}
-
-		// === STATE: SCANNING (look for nearby monsters) ===
-		target := findNearestFreeMonster(char, monsterPtrs, engaged)
-		if target != nil {
-			// Spotted a monster — start hunting
-			char.TargetMonsterID = &target.ID
-			e.db.Model(char).Update("target_monster_id", target.ID)
-			// Don't move yet, will start walking next tick
-			continue
-		}
-
-		// === STATE: WANDERING (no monsters nearby) ===
-		newIndex := wander(char)
-		if newIndex != char.H3Index {
-			char.H3Index = newIndex
-			e.db.Model(char).Updates(map[string]interface{}{
-				"h3_index":       newIndex,
-				"wander_bearing": char.WanderBearing,
-			})
-			events = append(events, map[string]interface{}{
-				"type":         "char_move",
-				"character_id": char.ID,
-				"h3_index":     newIndex,
-			})
-		}
+		ct.process()
+		allEvents = append(allEvents, ct.events...)
 	}
 
 	// Broadcast all events
-	for _, evt := range events {
+	for _, evt := range allEvents {
 		e.hub.Broadcast(topic, evt)
 	}
 
 	return true
-}
-
-// doCombat runs one round: character hits monster, monster hits character.
-// Updates HP in DB. Returns combat log events.
-func doCombat(db *gorm.DB, char *models.Character, monster *models.MapMonster) []map[string]interface{} {
-	var logs []map[string]interface{}
-
-	charStats := combatantFromCharacter(char)
-	monStats := combatantFromMonster(monster)
-
-	// Character attacks monster
-	hit := attack(charStats, monStats)
-	monster.CurrentHP -= hit.Damage
-	if monster.CurrentHP <= 0 {
-		monster.CurrentHP = 0
-		monster.IsAlive = false
-		db.Model(monster).Updates(map[string]interface{}{
-			"current_hp": 0,
-			"is_alive":   false,
-		})
-	} else {
-		db.Model(monster).Update("current_hp", monster.CurrentHP)
-	}
-	logs = append(logs, map[string]interface{}{
-		"type":         "combat_log",
-		"attacker":     char.Name,
-		"attacker_id":  char.ID,
-		"defender":     monster.MonsterType.Name,
-		"defender_id":  monster.ID,
-		"damage":       hit.Damage,
-		"is_crit":      hit.IsCrit,
-		"character_id": char.ID,
-		"character_hp": char.HP,
-		"monster_id":   monster.ID,
-		"monster_hp":   monster.CurrentHP,
-	})
-
-	// Monster attacks character (only if both still alive)
-	if monster.IsAlive && char.IsAlive {
-		hit2 := attack(monStats, charStats)
-		char.HP -= hit2.Damage
-		if char.HP <= 0 {
-			char.HP = 0
-			char.IsAlive = false
-			now := time.Now()
-			db.Model(char).Updates(map[string]interface{}{
-				"hp":       0,
-				"is_alive": false,
-				"died_at":  now,
-			})
-		} else {
-			db.Model(char).Update("hp", char.HP)
-		}
-		logs = append(logs, map[string]interface{}{
-			"type":         "combat_log",
-			"attacker":     monster.MonsterType.Name,
-			"attacker_id":  monster.ID,
-			"defender":     char.Name,
-			"defender_id":  char.ID,
-			"damage":       hit2.Damage,
-			"is_crit":      hit2.IsCrit,
-			"character_id": char.ID,
-			"character_hp": char.HP,
-			"monster_id":   monster.ID,
-			"monster_hp":   monster.CurrentHP,
-		})
-	}
-
-	return logs
 }
 
 func topicToZone(topic string) string {

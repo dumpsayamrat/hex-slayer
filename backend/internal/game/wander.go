@@ -57,29 +57,6 @@ func wander(char *models.Character) string {
 	return newCell.String()
 }
 
-// wanderAndEmit performs a wander step, persists the move to DB,
-// and returns events to broadcast. Used after kills so the character
-// walks away before scanning for the next fight.
-func (e *Engine) wanderAndEmit(char *models.Character) []map[string]interface{} {
-	newIndex := wander(char)
-	if newIndex == char.H3Index {
-		return nil
-	}
-	char.H3Index = newIndex
-	e.db.Model(char).Updates(map[string]interface{}{
-		"h3_index":          newIndex,
-		"wander_bearing":    char.WanderBearing,
-		"target_monster_id": nil,
-	})
-	return []map[string]interface{}{
-		{
-			"type":         "char_move",
-			"character_id": char.ID,
-			"h3_index":     newIndex,
-		},
-	}
-}
-
 // normalizeBearing keeps bearing in [0, 360)
 func normalizeBearing(b float64) float64 {
 	b = math.Mod(b, 360)
