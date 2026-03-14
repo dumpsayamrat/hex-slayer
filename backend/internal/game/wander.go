@@ -8,8 +8,7 @@ import (
 	"hexslayer/internal/db"
 	"hexslayer/internal/models"
 
-	h3light "github.com/ThingsIXFoundation/h3-light"
-	"github.com/ziprecruiter/h3-go/pkg/h3"
+	h3 "github.com/uber/h3-go/v4"
 )
 
 const (
@@ -21,9 +20,13 @@ const (
 // with gradual random drift for smooth, human-like curves.
 // Updates char.WanderBearing in place. Returns the new H3 index.
 func wander(char *models.Character) string {
-	// Get current position via h3-light
-	lightCell := h3light.MustCellFromString(char.H3Index)
-	lat, lng := lightCell.LatLon()
+	// Get current position
+	charCell := h3.CellFromString(char.H3Index)
+	ll, err := h3.CellToLatLng(charCell)
+	if err != nil {
+		return char.H3Index
+	}
+	lat, lng := ll.Lat, ll.Lng
 
 	// Drift the bearing gradually
 	drift := (rand.Float64()*2 - 1) * config.WanderBearingDriftMax
@@ -39,8 +42,7 @@ func wander(char *models.Character) string {
 	newLng := lng + stepDistanceDeg*math.Sin(bearingRad)/math.Cos(lat*math.Pi/180.0)
 
 	// Convert to H3 cell
-	ll := h3.NewLatLng(newLat, newLng)
-	newCell, err := h3.NewCellFromLatLng(ll, config.EntityResolution)
+	newCell, err := h3.LatLngToCell(h3.NewLatLng(newLat, newLng), config.EntityResolution)
 	if err != nil {
 		return char.H3Index
 	}

@@ -9,9 +9,7 @@ import (
 	"hexslayer/internal/models"
 
 	"github.com/google/uuid"
-
-	h3light "github.com/ThingsIXFoundation/h3-light"
-	"github.com/ziprecruiter/h3-go/pkg/h3"
+	h3 "github.com/uber/h3-go/v4"
 )
 
 // ZoneMonsterResponse is the lean monster data sent to the frontend.
@@ -29,7 +27,7 @@ type ZoneMonsterResponse struct {
 // ensures monsters are spawned up to cap, and returns all monsters in the zone.
 func GetOrCreateZoneMonsters(lat, lng float64) (string, []ZoneMonsterResponse, error) {
 	ll := h3.NewLatLng(lat, lng)
-	zone, err := h3.NewCellFromLatLng(ll, config.ZoneResolution)
+	zone, err := h3.LatLngToCell(ll, config.ZoneResolution)
 	if err != nil {
 		return "", nil, err
 	}
@@ -80,31 +78,62 @@ func GetOrCreateZoneMonsters(lat, lng float64) (string, []ZoneMonsterResponse, e
 	return zoneStr, result, nil
 }
 
-// randomChildCell generates a random res-12 cell within a res-6 zone
-// by scattering random points near the zone center and verifying parentage.
-// Uses h3-light for Cell→LatLon (ziprecruiter/h3-go lacks this).
-func randomChildCell(zoneStr string, zone h3.Cell) string {
-	// Get zone center via h3-light (only lib that has Cell→LatLon)
-	lightCell := h3light.MustCellFromString(zoneStr)
-	centerLat, centerLon := lightCell.LatLon()
+// randomChildCell picks a random res-12 cell within a zone.
+func randomChildCell(zone h3.Cell) string {
+	children, err := h3.UncompactCells([]h3.Cell{zone}, config.EntityResolution)
+	if err != nil || len(children) == 0 {
+		return zone.String()
+	}
+	return children[rand.Intn(len(children))].String()
+}
 
-	const spread = 0.036
-	for {
-		lat := centerLat + (rand.Float64()*2-1)*spread
-		lon := centerLon + (rand.Float64()*2-1)*spread
-		ll := h3.NewLatLng(lat, lon)
-		child, err := h3.NewCellFromLatLng(ll, config.EntityResolution)
+// getAvailableCells returns all res-12 children of a zone, split into
+// inner (center half) and outer (edge half), excluding cells that already
+// have alive monsters.
+func getAvailableCells(zone h3.Cell) (inner, outer []h3.Cell) {
+	// Get all res-12 children of this res-6 zone
+	allChildren, err := h3.UncompactCells([]h3.Cell{zone}, config.EntityResolution)
+	if err != nil || len(allChildren) == 0 {
+		return nil, nil
+	}
+
+	// Get zone center at res-12 for distance calculation
+	centerLL, err := h3.CellToLatLng(zone)
+	if err != nil {
+		return nil, nil
+	}
+	centerCell, err := h3.LatLngToCell(centerLL, config.EntityResolution)
+	if err != nil {
+		return nil, nil
+	}
+
+	// Find max distance to determine midpoint
+	maxDist := 0
+	type cellDist struct {
+		cell h3.Cell
+		dist int
+	}
+	cells := make([]cellDist, 0, len(allChildren))
+	for _, c := range allChildren {
+		d, err := h3.GridDistance(centerCell, c)
 		if err != nil {
 			continue
 		}
-		parent, err := child.Parent(config.ZoneResolution)
-		if err != nil {
-			continue
-		}
-		if parent == zone {
-			return child.String()
+		cells = append(cells, cellDist{cell: c, dist: d})
+		if d > maxDist {
+			maxDist = d
 		}
 	}
+
+	mid := maxDist / 2
+	for _, cd := range cells {
+		if cd.dist <= mid {
+			inner = append(inner, cd.cell)
+		} else {
+			outer = append(outer, cd.cell)
+		}
+	}
+	return inner, outer
 }
 
 func spawnMonsters(zoneStr string, zone h3.Cell, count int) error {
@@ -116,19 +145,72 @@ func spawnMonsters(zoneStr string, zone h3.Cell, count int) error {
 		return nil
 	}
 
-	monsters := make([]models.MapMonster, count)
+	inner, outer := getAvailableCells(zone)
+	if len(inner) == 0 && len(outer) == 0 {
+		return nil
+	}
+
+	// Load occupied cells (alive monsters) to filter them out
+	var occupied []string
+	db.DB.Model(&models.MapMonster{}).
+		Where("h3_zone = ? AND is_alive = true", zoneStr).
+		Pluck("h3_index", &occupied)
+	occupiedSet := make(map[string]bool, len(occupied))
+	for _, idx := range occupied {
+		occupiedSet[idx] = true
+	}
+
+	// Filter out occupied cells
+	filterAvailable := func(cells []h3.Cell) []h3.Cell {
+		available := make([]h3.Cell, 0, len(cells))
+		for _, c := range cells {
+			if !occupiedSet[c.String()] {
+				available = append(available, c)
+			}
+		}
+		return available
+	}
+	innerAvail := filterAvailable(inner)
+	outerAvail := filterAvailable(outer)
+
+	if len(innerAvail) == 0 && len(outerAvail) == 0 {
+		return nil
+	}
+
+	// Shuffle both pools for random picking without replacement
+	rand.Shuffle(len(innerAvail), func(i, j int) { innerAvail[i], innerAvail[j] = innerAvail[j], innerAvail[i] })
+	rand.Shuffle(len(outerAvail), func(i, j int) { outerAvail[i], outerAvail[j] = outerAvail[j], outerAvail[i] })
+
+	innerIdx, outerIdx := 0, 0
+	monsters := make([]models.MapMonster, 0, count)
 	for i := 0; i < count; i++ {
 		mt := monsterTypes[rand.Intn(len(monsterTypes))]
-		cellStr := randomChildCell(zoneStr, zone)
 
-		monsters[i] = models.MapMonster{
+		// 50/50 inner vs outer, fallback if one is exhausted
+		var cellStr string
+		canInner := innerIdx < len(innerAvail)
+		canOuter := outerIdx < len(outerAvail)
+		if !canInner && !canOuter {
+			break
+		}
+
+		useInner := canInner && (!canOuter || rand.Float64() < 0.5)
+		if useInner {
+			cellStr = innerAvail[innerIdx].String()
+			innerIdx++
+		} else {
+			cellStr = outerAvail[outerIdx].String()
+			outerIdx++
+		}
+
+		monsters = append(monsters, models.MapMonster{
 			ID:            uuid.New().String(),
 			H3Zone:        zoneStr,
 			H3Index:       cellStr,
 			MonsterTypeID: mt.ID,
 			CurrentHP:     mt.MaxHP,
 			IsAlive:       true,
-		}
+		})
 	}
 
 	return db.DB.CreateInBatches(monsters, 100).Error

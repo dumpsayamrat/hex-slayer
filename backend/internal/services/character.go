@@ -9,7 +9,7 @@ import (
 	"hexslayer/internal/models"
 
 	"github.com/google/uuid"
-	"github.com/ziprecruiter/h3-go/pkg/h3"
+	h3 "github.com/uber/h3-go/v4"
 )
 
 const MaxCharactersPerPlayer = 2
@@ -55,11 +55,11 @@ func DeployCharacter(playerID, h3Zone string) (*models.Character, error) {
 		return nil, fmt.Errorf("no active monsters in zone %s", h3Zone)
 	}
 
-	zone, err := h3.NewCellFromString(h3Zone)
-	if err != nil {
-		return nil, fmt.Errorf("invalid h3_zone: %w", err)
+	zone := h3.CellFromString(h3Zone)
+	if !h3.IsValidIndex(zone) {
+		return nil, fmt.Errorf("invalid h3_zone: %s", h3Zone)
 	}
-	cellStr := randomChildCell(h3Zone, zone)
+	cellStr := randomChildCell(zone)
 
 	maxHP := randRangeInt(500, 700)
 	char := models.Character{
