@@ -1,6 +1,6 @@
 # HexSlayer
 
-A real-time idle geo-based monster hunting game built with Go and React. Characters autonomously wander an H3 hex-grid world, detect nearby monsters, pursue them, and engage in turn-based combat — all streamed live to the browser over WebSocket.
+A real-time idle geo-based monster hunting game built with Go, Java (Spring Boot), and React. Characters autonomously wander an H3 hex-grid world, detect nearby monsters, pursue them, and engage in turn-based combat — all streamed live to the browser over WebSocket.
 
 ### [Live Demo — hexslayer.dumpsayamrat.com](https://hexslayer.dumpsayamrat.com)
 
@@ -14,12 +14,19 @@ A real-time idle geo-based monster hunting game built with Go and React. Charact
 
 ## Tech Stack
 
-### Backend (Go 1.23)
+### Backend — Go 1.23
 - **Gin** — HTTP router and middleware
 - **GORM + SQLite** — ORM with auto-migration and seed data
 - **Gorilla WebSocket** — Real-time event streaming with topic-based pub/sub
 - **uber/h3-go/v4** — H3 geospatial indexing (CGo bindings)
 - **Swagger** (swaggo) — Auto-generated API docs
+
+### Backend — Java 25 (Spring Boot 4)
+- **Spring Web** — REST controllers and middleware (interceptors)
+- **Spring Data JPA + Hibernate + SQLite** — ORM with auto-migration and seed data
+- **Spring WebSocket** — Real-time event streaming with topic-based pub/sub
+- **H3-Java** (com.uber:h3) — H3 geospatial indexing
+- **Jackson** — JSON serialization with snake_case naming
 
 ### Frontend (React 18)
 - **Vite** — Dev server with HMR
@@ -48,6 +55,19 @@ backend/
 │   ├── models/                  # GORM models (Player, Character, MapMonster, etc.)
 │   ├── services/                # Zone monster spawning, character deployment
 │   └── ws/                      # WebSocket hub with topic pub/sub
+backend-java/
+├── src/main/java/com/hexslayer/
+│   ├── HexslayerApplication.java   # Entry point, engine bootstrap
+│   ├── config/                     # WebSocket, CORS, data seeder
+│   ├── controller/                 # REST controllers (Health, Player, Map, Character)
+│   ├── dto/                        # Response DTOs
+│   ├── exception/                  # Global error handler
+│   ├── game/                       # Game engine (tick loop, combat, movement)
+│   ├── middleware/                  # Auth interceptor (Bearer token)
+│   ├── model/                      # JPA entities (Player, Character, MapMonster, etc.)
+│   ├── repository/                 # Spring Data JPA repositories
+│   ├── service/                    # Zone spawning, player, character services
+│   └── ws/                         # WebSocket hub + handler
 frontend/
 ├── src/
 │   ├── components/
@@ -63,12 +83,13 @@ frontend/
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.23+ (for Go backend)
+- Java 25+ and Maven 3.9+ (for Java backend)
 - Node.js 18+
 - C compiler (gcc/build-essential) — required by uber/h3-go CGo bindings
 - CMake
 
-### Backend
+### Backend (Go)
 
 ```bash
 cd backend
@@ -76,6 +97,15 @@ go run ./cmd/server
 ```
 
 The server starts on `http://localhost:8080`. Swagger docs are available at `/swagger/index.html`.
+
+### Backend (Java)
+
+```bash
+cd backend-java
+mvn spring-boot:run
+```
+
+The server starts on `http://localhost:8080`. Both backends expose the same API and are interchangeable.
 
 ### Frontend
 
