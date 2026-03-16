@@ -3,11 +3,13 @@ package com.hexslayer.controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 @RestController
 public class HealthController {
 
     @GetMapping("/api/health")
-    public String health() {
-        return "Hello from HexSlayer!";
+    public Map<String, String> health() {
+        return Map.of("status", "ok");
     }
 }

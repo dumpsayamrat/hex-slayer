@@ -10,8 +10,11 @@ public class Character {
     @Id
     private String id;
 
+    @Column(name = "player_id", nullable = false)
+    private String playerId;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "player_id", nullable = false)
+    @JoinColumn(name = "player_id", insertable = false, updatable = false)
     private Player player;
 
     @Column(nullable = false)
@@ -71,6 +74,8 @@ public class Character {
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
+    public String getPlayerId() { return playerId; }
+    public void setPlayerId(String playerId) { this.playerId = playerId; }
     public Player getPlayer() { return player; }
     public void setPlayer(Player player) { this.player = player; }
     public String getName() { return name; }
